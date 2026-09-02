@@ -1,0 +1,24 @@
+# Rust
+target/
+**/*.rs.bk
+
+# Tauri 构建产物
+src-tauri/target/
+src-tauri/gen/
+
+# Node（本项目前端为原生 HTML/CSS/JS，此处仅作兜底）
+node_modules/
+dist/
+
+# Python 插件
+__pycache__/
+*.pyc
+
+# 编辑器与系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 本地运行时数据（不应入库）
+.intools/
