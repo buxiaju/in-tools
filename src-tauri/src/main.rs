@@ -1,13 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod commands;
-mod config;
-mod mcp;
-mod permission;
-mod protocol;
-mod registry;
-mod runtime;
-
 fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
