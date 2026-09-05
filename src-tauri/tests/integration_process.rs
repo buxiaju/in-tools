@@ -129,7 +129,10 @@ async fn 插件返回的错误会转成插件错误() {
 
     // 缺少必填的 text，插件应回 JSON-RPC error 而非崩溃。
     let err = instance
-        .call("tools/call", json!({ "name": "hello:echo", "arguments": {} }))
+        .call(
+            "tools/call",
+            json!({ "name": "hello:echo", "arguments": {} }),
+        )
         .await
         .expect_err("缺参数应当报错");
 
@@ -173,7 +176,10 @@ async fn 优雅关停后进程真正退出() {
 
     // 关停后再调用要被状态机挡住，而不是打到已死的管道上。
     let err = instance
-        .call("tools/call", json!({ "name": "hello:echo", "arguments": { "text": "x" } }))
+        .call(
+            "tools/call",
+            json!({ "name": "hello:echo", "arguments": { "text": "x" } }),
+        )
         .await
         .expect_err("已停止的实例不应接受请求");
     assert!(matches!(err, InstanceError::NotReady { .. }));
@@ -198,7 +204,10 @@ async fn 插件崩溃后待处理请求以错误收场() {
     // hello:crash 用 os._exit 猝死，不会回响应。宿主只能靠 stdout 的 EOF
     // 察觉断连，进而把在途请求全部失败掉——这正是要验证的路径。
     let err = instance
-        .call("tools/call", json!({ "name": "hello:crash", "arguments": {} }))
+        .call(
+            "tools/call",
+            json!({ "name": "hello:crash", "arguments": {} }),
+        )
         .await
         .expect_err("崩溃时调用不应成功返回");
 
@@ -232,7 +241,9 @@ async fn 可执行文件不存在时报错清晰() {
         vec![],
     );
 
-    let err = spawn_plugin(config).await.expect_err("不存在的命令应启动失败");
+    let err = spawn_plugin(config)
+        .await
+        .expect_err("不存在的命令应启动失败");
     let message = err.to_string();
 
     assert!(
@@ -243,9 +254,16 @@ async fn 可执行文件不存在时报错清晰() {
 
 #[tokio::test]
 async fn 插件目录不存在时不会拉起进程() {
-    let config = ProcessConfig::new(PLUGIN_ID, plugin_dir().join("不存在的子目录"), python(), vec![]);
+    let config = ProcessConfig::new(
+        PLUGIN_ID,
+        plugin_dir().join("不存在的子目录"),
+        python(),
+        vec![],
+    );
 
-    let err = spawn_plugin(config).await.expect_err("目录不存在应提前失败");
+    let err = spawn_plugin(config)
+        .await
+        .expect_err("目录不存在应提前失败");
     assert!(err.to_string().contains("目录不存在"), "实际：{err}");
 }
 

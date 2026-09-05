@@ -1,0 +1,33 @@
+[plugin]
+id = "com.intools.ai-orchestrator"
+name = "AI 编排"
+version = "0.1.0"
+author = "InTools"
+description = "对接 OpenAI 兼容 API，自动调用其他插件的工具完成任务"
+
+[exec]
+command = "python"
+args = ["-u", "main.py"]
+
+[[tools]]
+name = "ai:chat"
+description = "向 AI 发送消息，AI 会自动选择并调用可用工具来完成任务"
+[tools.input_schema]
+type = "object"
+required = ["message"]
+[tools.input_schema.properties.message]
+type = "string"
+description = "用户的自然语言消息"
+
+[capabilities]
+permissions = ["network:http"]
+
+[docs]
+usage_file = "README.md"
+
+[lifecycle]
+mode = "startup"
+# startup 模式常驻不回收；manifest 校验拒绝 0，用足够大的值表达「不过期」。
+idle_timeout_sec = 86400
+restart_policy = "on-failure"
+request_timeout_sec = 120

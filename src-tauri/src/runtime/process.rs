@@ -21,6 +21,10 @@
 //! # Windows 残留进程防护
 //!
 //! 见 [`job`] 模块：宿主级全局 Job Object + `KILL_ON_JOB_CLOSE`。
+//!
+//! # Windows 控制台窗口
+//!
+//! 见 [`console`] 模块：无窗宿主拉起 `python.exe` 会新分配控制台，须显式抑制。
 
 #![allow(dead_code)]
 
@@ -208,6 +212,7 @@ pub async fn spawn_plugin(config: ProcessConfig) -> Result<Arc<StdioTransport>, 
         // tokio 侧兜底：Child 被丢弃时顺手杀掉。它只在 runtime 存活时有效，
         // 覆盖不了宿主崩溃，真正的兜底是下面的 Job Object。
         .kill_on_drop(true);
+    console::hide(&mut command);
 
     let mut child = command.spawn().map_err(|e| ProcessError::Spawn {
         plugin_id: config.plugin_id.clone(),
@@ -456,6 +461,38 @@ impl Transport for StdioTransport {
     }
 }
 
+// ─────────────────── 控制台窗口抑制 ───────────────────
+
+/// 抑制子进程的控制台窗口。
+///
+/// release 构建的宿主是 `windows_subsystem = "windows"`，自身不带控制台。
+/// Windows 的规则是：一个控制台子系统程序（`python.exe`）被没有控制台的父进程
+/// 拉起时，内核会**新分配**一个控制台——于是每启动一个插件就闪出一个黑框，
+/// 而且它属于插件进程，宿主无法事后关掉。
+///
+/// `CREATE_NO_WINDOW`（0x0800_0000）让子进程在没有窗口的情况下运行。它不影响
+/// 三条标准流：我们已经把 stdin/stdout/stderr 全部重定向到管道，JSON-RPC 通信
+/// 与 stderr 日志都照常工作。
+///
+/// 常量直接写字面量而不引 `windows-sys`：为它单独开 `Win32_System_Threading`
+/// feature 会拖进一大片用不上的绑定，而这个值是 Win32 ABI 的一部分，不会变。
+#[cfg(windows)]
+mod console {
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+    pub fn hide(command: &mut tokio::process::Command) {
+        // tokio 在 Windows 上把 `creation_flags` 做成了内建方法，
+        // 不需要额外引入 `std::os::windows::process::CommandExt`。
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+}
+
+/// 非 Windows 平台：子进程不会凭空弹出窗口，无需处理。
+#[cfg(not(windows))]
+mod console {
+    pub fn hide(_command: &mut tokio::process::Command) {}
+}
+
 // ─────────────────── Windows Job Object ───────────────────
 
 /// 防止插件子进程在宿主消失后残留。
@@ -477,8 +514,8 @@ mod job {
 
     use windows_sys::Win32::Foundation::HANDLE;
     use windows_sys::Win32::System::JobObjects::{
-        AssignProcessToJobObject, CreateJobObjectW, SetInformationJobObject,
-        JobObjectExtendedLimitInformation, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
         JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     };
 
@@ -542,11 +579,7 @@ mod job {
 /// 非 Windows 平台：内核没有等价机制，依赖 `kill_on_drop` 与显式 `close()`。
 #[cfg(not(windows))]
 mod job {
-    pub fn assign_current_process_job(
-        _child: &tokio::process::Child,
-        _pid: u32,
-        _plugin_id: &str,
-    ) {
+    pub fn assign_current_process_job(_child: &tokio::process::Child, _pid: u32, _plugin_id: &str) {
     }
 }
 

@@ -1,0 +1,51 @@
+[plugin]
+id = "com.intools.screenshot"
+name = "屏幕截图"
+version = "0.1.0"
+author = "InTools"
+description = "截取主屏幕画面，保存为 PNG 文件并返回路径"
+
+[exec]
+command = "python"
+args = ["-u", "main.py"]
+
+[[tools]]
+name = "screenshot:capture"
+description = "截取当前主屏幕画面，保存为 PNG 文件，返回文件路径与图片尺寸"
+[tools.input_schema]
+type = "object"
+[tools.input_schema.properties.output_dir]
+type = "string"
+description = "截图保存目录，默认为用户主目录下的 Pictures"
+[tools.input_schema.properties.region]
+type = "object"
+description = "截图区域 {x, y, width, height}，不传则截取全屏"
+
+[capabilities]
+permissions = ["screen:capture"]
+
+[lifecycle]
+mode = "on-demand"
+idle_timeout_sec = 300
+restart_policy = "on-failure"
+
+[shortcut]
+key = "Ctrl+Shift+S"
+tool = "screenshot:capture"
+ui = "region-select"
+
+[docs]
+usage_file = "README.md"
+
+[[settings]]
+key = "output_dir"
+label = "截图保存目录"
+type = "string"
+default = "~/Pictures"
+
+[[settings]]
+key = "image_format"
+label = "图片格式"
+type = "select"
+default = "png"
+options = ["png"]

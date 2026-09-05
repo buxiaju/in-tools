@@ -4,24 +4,54 @@ version = "0.1.0"
 description = "InTools 插件宿主"
 authors = ["InTools"]
 edition = "2021"
-rust-version = "1.85"
+# 1.88 由 zip 8.6.0 的 MSRV 决定。抬这个数字不是为了用新语法，
+# 而是不让声明变成假话——留在 1.85 的话，拿 1.85 编译会撞上一条
+# 指向 zip 内部的费解报错。
+rust-version = "1.88"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
 async-trait = "0.1.92"
+# MCP 网关的 HTTP 端点。hyper / http / tower 等底座已被 tauri 传递引入，
+# 这里只额外增加 axum 自身与 matchit 两个小 crate。
+axum = "0.8.9"
+# MCP 审计日志的时间戳。AuditEntry 自身不带时间，落盘时必须补上，
+# 否则事后无法归因。tauri 已传递引入同版本，不额外增加编译负担。
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
 dirs = "6.0.0"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
-tauri = { version = "2.11.5", features = [] }
+tauri = { version = "2.11.5", features = ["tray-icon", "image-png"] }
 thiserror = "2.0.20"
-tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time", "fs"] }
+# "net" 是 axum 绑定 TcpListener 所需。
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time", "fs", "net"] }
 toml = "1.1.4"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+# MCP Bearer token 生成。版本与 tauri 已传递引入的一致，不额外增加编译负担。
+uuid = { version = "1.26.0", features = ["v4"] }
+# 导入插件包的 zip 解压。default 会拖进 aes / bzip2 / lzma / zstd / xz 一整套
+# 压缩后端，全部关掉，只留 deflate——它是 Windows 资源管理器「压缩到 zip」和
+# 常见打包工具的默认算法。
+#
+# 选 `deflate-flate2-zlib-rs` 而不是 `deflate`：后者等于本 feature 再加 zopfli，
+# 而 zopfli 是纯压缩用的编码器，本功能只解压、从不写 zip。也不能退到更朴素的
+# `deflate-flate2`——它只打开 flate2 依赖却不选 zlib 后端，flate2 会以
+# `compile_error!("You need to choose a zlib backend")` 拒绝编译。
+# `-zlib-rs` 是纯 Rust 实现，不引入 C 工具链依赖。
+zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+
+# 全局快捷键：注册系统级热键，让用户在任意应用中按快捷键直接调用插件工具。
+# 仅桌面端需要，用 target 限定避免拖累移动构建（虽然当前项目不支持移动端，
+# 但这是 Tauri 生态的惯例写法）。
+[target."cfg(any(target_os = \"macos\", windows, target_os = \"linux\"))".dependencies]
+tauri-plugin-global-shortcut = "2"
 
 [dev-dependencies]
+# 集成测试里当 MCP 客户端用。localhost 明文 HTTP，不需要任何 TLS 后端。
+reqwest = { version = "0.13.4", default-features = false, features = ["json"] }
 tempfile = "3.27.0"
 tokio = { version = "1.53.1", features = ["test-util"] }
 

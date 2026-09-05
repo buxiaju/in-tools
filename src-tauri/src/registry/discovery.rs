@@ -227,9 +227,17 @@ command = "python"
         let entries = scan_plugins_root(tmp.path()).unwrap();
         // 排序后 Err 在前、Ok 在后；bad < good，所以顺序是 bad(err) → good(ok)
         assert_eq!(entries.len(), 2);
-        assert!(entries[0].is_err(), "期望第 0 项是错误，实际 {:?}", entries[0]);
+        assert!(
+            entries[0].is_err(),
+            "期望第 0 项是错误，实际 {:?}",
+            entries[0]
+        );
         let err = entries[0].as_ref().unwrap_err();
-        assert!(matches!(err, LoadError::MissingManifest { .. }), "err={:?}", err);
+        assert!(
+            matches!(err, LoadError::MissingManifest { .. }),
+            "err={:?}",
+            err
+        );
         assert_eq!(
             entries[1].as_ref().unwrap().manifest.plugin.id,
             "com.example.good"
@@ -255,10 +263,7 @@ command = "python"
             panic!("期望 Manifest 错误，实际 {:?}", malformed_err);
         };
         assert_eq!(*path, malformed.join("manifest.toml"));
-        let good_entry = entries
-            .iter()
-            .find_map(|e| e.as_ref().ok())
-            .unwrap();
+        let good_entry = entries.iter().find_map(|e| e.as_ref().ok()).unwrap();
         assert_eq!(good_entry.manifest.plugin.id, "com.example.good");
     }
 

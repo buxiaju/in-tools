@@ -30,6 +30,9 @@ type = "object"
 [capabilities]
 permissions = []
 
+[docs]
+usage_file = "README.md"
+
 [lifecycle]
 mode = "on-demand"
 idle_timeout_sec = 300

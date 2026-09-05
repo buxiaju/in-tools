@@ -1,27 +1,278 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>InTools</title>
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
-  <nav id="nav">
-    <div class="brand">InTools</div>
-    <a href="#plugins" class="nav-item" data-route="plugins">插件</a>
-    <a href="#chat" class="nav-item" data-route="chat">AI 对话</a>
-    <a href="#permissions" class="nav-item" data-route="permissions">权限</a>
-    <a href="#settings" class="nav-item" data-route="settings">设置</a>
-  </nav>
+  <head>
+    <meta charset="UTF-8" />
+    <title>InTools</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <nav id="nav">
+      <div class="brand">InTools</div>
+      <a href="#plugins" class="nav-item" data-route="plugins">插件</a>
+      <a href="#chat" class="nav-item" data-route="chat">AI 对话</a>
+      <a href="#permissions" class="nav-item" data-route="permissions">权限</a>
+      <a href="#settings" class="nav-item" data-route="settings">设置</a>
+    </nav>
 
-  <main id="main">
-    <section id="view-plugins" class="view"></section>
-    <section id="view-chat" class="view"></section>
-    <section id="view-permissions" class="view"></section>
-    <section id="view-settings" class="view"></section>
-  </main>
+    <main id="main">
+      <section id="view-plugins" class="view">
+        <header class="view-head">
+          <div>
+            <h2>插件</h2>
+            <p class="hint">已加载的插件、运行状态与启停。</p>
+          </div>
+          <div class="head-actions">
+            <!-- 用原生 file input 而不是系统对话框插件：CSP 的 script-src 不限制
+                 input 元素，省掉一个依赖与一份 capabilities 配置。 -->
+            <input type="file" id="import-file" accept=".zip" hidden />
+            <button class="btn" data-act="import-plugin">导入插件包</button>
+            <button class="btn" data-act="reload-plugins">刷新</button>
+          </div>
+        </header>
+        <div id="plugins-list" class="list"></div>
+      </section>
 
-  <script type="module" src="main.js"></script>
-</body>
+      <section id="view-chat" class="view">
+        <header class="view-head">
+          <div>
+            <h2>AI 对话</h2>
+            <p class="hint">
+              向 AI 发送自然语言消息，它会自动调用可用工具完成任务。
+            </p>
+          </div>
+          <button class="btn" data-act="clear-chat">清空</button>
+        </header>
+
+        <div id="chat-log" class="chat-log"></div>
+
+        <form id="chat-form" class="chat-form" autocomplete="off">
+          <div class="row">
+            <input
+              id="chat-input"
+              class="input"
+              type="text"
+              placeholder="输入消息，例如：帮我找找桌面上有没有叫报告的文件"
+              autocomplete="off"
+            />
+            <button class="btn primary" type="submit">发送</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="view-permissions" class="view">
+        <header class="view-head">
+          <div>
+            <h2>权限</h2>
+            <p class="hint">已落盘的授权可撤销；勾选工具即对 MCP 客户端暴露。</p>
+          </div>
+          <button class="btn" data-act="reload-permissions">刷新</button>
+        </header>
+
+        <h3>已授权</h3>
+        <div id="grants-list" class="list"></div>
+
+        <h3>MCP 暴露</h3>
+        <p class="hint">
+          默认零暴露。声明 <code>input:control</code> 或 <code>process:spawn</code>
+          的插件即使勾选也会被网关拦截。
+        </p>
+        <div id="exposure-list" class="list"></div>
+
+        <h3>MCP 调用记录</h3>
+        <p class="hint">
+          谁、什么时候、调了哪个工具、结果如何。最近 50 条，最新在前。
+        </p>
+        <div id="audit-list" class="list"></div>
+      </section>
+
+      <section id="view-settings" class="view">
+        <header class="view-head">
+          <div>
+            <h2>设置</h2>
+            <p class="hint">插件目录、MCP 网关与日志级别。</p>
+          </div>
+        </header>
+
+        <form id="settings-form" class="form" autocomplete="off">
+          <label class="field">
+            <span class="label">插件目录</span>
+            <input id="settings-dir" class="input" type="text" placeholder="留空使用默认目录" />
+            <span class="field-hint" id="settings-dir-hint"></span>
+          </label>
+
+          <label class="field">
+            <span class="label">日志级别</span>
+            <select id="settings-log" class="input">
+              <option value="error">error</option>
+              <option value="warn">warn</option>
+              <option value="info">info</option>
+              <option value="debug">debug</option>
+              <option value="trace">trace</option>
+            </select>
+            <span class="field-hint">
+              环境变量 <code>INTOOLS_LOG</code> 优先于此处；改动需重启生效。
+            </span>
+          </label>
+
+          <label class="field">
+            <span class="label">关闭按钮</span>
+            <select id="settings-close" class="input">
+              <option value="minimize_to_tray">隐藏到托盘（推荐）</option>
+              <option value="exit">退出宿主</option>
+            </select>
+            <span class="field-hint">
+              「隐藏到托盘」可避免误点关闭杀掉后台插件；改动需重启生效。
+            </span>
+          </label>
+
+          <div class="row">
+            <button class="btn primary" type="submit">保存</button>
+            <span id="settings-status" class="field-hint"></span>
+          </div>
+        </form>
+
+        <h3>AI 配置</h3>
+        <form id="ai-config-form" class="form" autocomplete="off">
+          <label class="field">
+            <span class="label">API Base URL</span>
+            <input id="ai-base-url" class="input" type="text" placeholder="https://api.deepseek.com/v1" />
+            <span class="field-hint">OpenAI 兼容 API 地址。DeepSeek、Ollama、OpenAI 均可。</span>
+          </label>
+          <label class="field">
+            <span class="label">API Key</span>
+            <input id="ai-api-key" class="input mono" type="password" placeholder="sk-..." />
+            <span class="field-hint">本地存储，仅本机插件读取。Ollama 可留空。</span>
+          </label>
+          <label class="field">
+            <span class="label">模型名</span>
+            <input id="ai-model" class="input" type="text" placeholder="deepseek-chat" />
+          </label>
+          <div class="row">
+            <button class="btn primary" type="submit">保存 AI 配置</button>
+            <span id="ai-config-status" class="field-hint"></span>
+          </div>
+        </form>
+
+        <h3>MCP 网关</h3>
+        <div class="form">
+          <label class="field checkbox">
+            <input id="settings-mcp" type="checkbox" />
+            <span>开启 MCP 网关（127.0.0.1:7801）</span>
+          </label>
+          <p id="settings-mcp-status" class="field-hint"></p>
+          <label class="field">
+            <span class="label">Bearer Token</span>
+            <input id="settings-token" class="input mono" type="text" readonly />
+            <span class="field-hint">首次开启时生成，关闭后保留，便于客户端复用。</span>
+          </label>
+          <div class="field">
+            <span class="label">客户端配置片段</span>
+            <select id="settings-client" class="input"></select>
+            <span id="settings-client-path" class="field-hint mono"></span>
+            <textarea
+              id="settings-snippet"
+              class="input mono snippet"
+              rows="11"
+              readonly
+            ></textarea>
+            <div class="row">
+              <button id="settings-copy" class="btn" type="button">复制配置</button>
+              <span id="settings-client-note" class="field-hint"></span>
+            </div>
+          </div>
+        </div>
+
+        <h3>全局快捷键</h3>
+        <div class="form">
+          <p class="field-hint">
+            只有声明了快捷键的插件会出现在这里。点插件卡片上的「快捷键」按钮可以改键。
+          </p>
+          <div id="shortcut-list" class="list"></div>
+        </div>
+      </section>
+    </main>
+
+    <div id="prompt-modal" class="modal-backdrop" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="prompt-title">
+        <h3 id="prompt-title">权限请求</h3>
+        <p id="prompt-body" class="prompt-body"></p>
+        <dl class="prompt-meta">
+          <dt>插件</dt>
+          <dd id="prompt-plugin"></dd>
+          <dt>权限</dt>
+          <dd id="prompt-permission" class="mono"></dd>
+          <dt>工具</dt>
+          <dd id="prompt-tool" class="mono"></dd>
+          <dt>参数</dt>
+          <dd id="prompt-args" class="mono"></dd>
+          <dt>调用方</dt>
+          <dd id="prompt-caller" class="mono"></dd>
+        </dl>
+        <p id="prompt-queue" class="field-hint"></p>
+        <div class="modal-actions">
+          <button class="btn danger" data-decision="deny-always">永久拒绝</button>
+          <button class="btn" data-decision="deny-once">本次拒绝</button>
+          <button class="btn" data-decision="allow-session">本次运行允许</button>
+          <button class="btn primary" data-decision="allow-always">始终允许</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" hidden></div>
+
+    <div id="plugin-settings-modal" class="modal-backdrop" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ps-title">
+        <h3 id="ps-title">插件设置</h3>
+        <form id="ps-form" class="form" autocomplete="off"></form>
+        <div class="modal-actions">
+          <button class="btn" id="ps-cancel" type="button">取消</button>
+          <button class="btn primary" id="ps-save" type="button">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="shortcut-modal" class="modal-backdrop" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="sk-title">
+        <h3 id="sk-title">设置快捷键</h3>
+        <div class="form">
+          <div class="field">
+            <span class="label">按下想要的组合键</span>
+            <!--
+              用 button 而不是 input：这里要的是「捕获按键」而不是「输入文本」，
+              而 input 会被输入法和浏览器默认行为抢走一部分按键。
+            -->
+            <button id="sk-capture" class="btn keycap mono" type="button"></button>
+            <span class="field-hint">
+              至少带一个修饰键（Ctrl / Alt / Shift / Super）。Esc 取消捕获。
+            </span>
+          </div>
+          <label class="field checkbox">
+            <input id="sk-enabled" type="checkbox" />
+            <span>启用这个快捷键</span>
+          </label>
+          <p id="sk-default" class="field-hint"></p>
+          <p id="sk-warn" class="card-error" hidden></p>
+        </div>
+        <div class="modal-actions">
+          <button class="btn" id="sk-reset" type="button">恢复默认</button>
+          <button class="btn" id="sk-cancel" type="button">取消</button>
+          <button class="btn primary" id="sk-save" type="button">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="docs-modal" class="modal-backdrop" hidden>
+      <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="docs-title">
+        <h3 id="docs-title">使用说明</h3>
+        <p id="docs-file" class="field-hint mono"></p>
+        <input type="search" id="docs-search" class="input docs-search" placeholder="搜索文档…" autocomplete="off">
+        <div id="docs-body" class="docs-body"></div>
+        <div class="modal-actions">
+          <button class="btn primary" id="docs-close" type="button">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="main.js"></script>
+  </body>
 </html>

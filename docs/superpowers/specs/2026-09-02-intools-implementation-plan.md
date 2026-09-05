@@ -171,6 +171,7 @@
    - 设置：插件目录、MCP 开关与 Token、日志级别
 3. 权限询问弹窗：实现 `PermissionPrompter`
 4. `notify/stream` 等通知经 Tauri event 推送前端渲染
+5. `src-tauri/capabilities/default.json`：主窗口须授予 `core:default`。自定义 `#[tauri::command]` 不受 ACL 约束，但 `listen()` 属于内置 `core:event` 插件命令，缺少 capability 时会被静默拒绝——`listen()` 返回的 Promise 被 reject 而界面毫无痕迹，权限弹窗与插件通知将永远收不到事件。前端订阅处必须 `.catch()` 并报错，否则该故障无法定位。
 
 **验证**：`cargo tauri dev` 手动走查——`hello-plugin` 可见且状态正确、能手动调用 `hello:echo` 看到结果、触发中危权限时弹窗出现且拒绝后调用失败、撤销授权后再次调用重新询问。
 

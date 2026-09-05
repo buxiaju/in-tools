@@ -1,0 +1,39 @@
+[plugin]
+id = "com.intools.filesearch"
+name = "文件搜索"
+version = "0.1.0"
+author = "InTools"
+description = "按文件名关键词搜索指定目录，仅使用 Python 标准库"
+
+[exec]
+command = "python"
+args = ["-u", "main.py"]
+
+[[tools]]
+name = "search:files"
+description = "按文件名关键词搜索指定目录下的文件，返回匹配的文件路径列表"
+[tools.input_schema]
+type = "object"
+required = ["keyword"]
+[tools.input_schema.properties.keyword]
+type = "string"
+description = "文件名中需要包含的关键词（不区分大小写）"
+[tools.input_schema.properties.directory]
+type = "string"
+description = "搜索的根目录，默认为用户主目录"
+[tools.input_schema.properties.max_results]
+type = "integer"
+description = "最多返回的结果数，默认 50"
+minimum = 1
+maximum = 500
+
+[capabilities]
+permissions = ["file:read"]
+
+[docs]
+usage_file = "README.md"
+
+[lifecycle]
+mode = "on-demand"
+idle_timeout_sec = 300
+restart_policy = "on-failure"

@@ -1,0 +1,66 @@
+[plugin]
+id = "com.intools.caller"
+name = "Caller 测试插件"
+version = "0.1.0"
+author = "InTools"
+description = "反向 RPC 集成测试的调用方：通过 host/* 回调宿主，验证插件间调用链路"
+
+[exec]
+command = "python"
+args = ["-u", "main.py"]
+
+[[tools]]
+name = "caller:call"
+description = "经 host/callTool 调用指定工具，原样透传结果与错误"
+[tools.input_schema]
+type = "object"
+required = ["tool"]
+[tools.input_schema.properties.tool]
+type = "string"
+description = "要调用的工具名"
+[tools.input_schema.properties.arguments]
+type = "object"
+description = "调用参数"
+
+[[tools]]
+name = "caller:list"
+description = "调用 host/listTools 列出全部工具"
+[tools.input_schema]
+type = "object"
+
+[[tools]]
+name = "caller:config"
+description = "先 host/setConfig 再 host/getConfig，验证配置往返"
+[tools.input_schema]
+type = "object"
+[tools.input_schema.properties.value]
+description = "要写入的配置值"
+
+[[tools]]
+name = "caller:notify"
+description = "调用 host/notify 发送通知"
+[tools.input_schema]
+type = "object"
+[tools.input_schema.properties.method]
+type = "string"
+description = "通知方法名"
+
+[[tools]]
+name = "caller:unknown"
+description = "调用不存在的 host/unknown 方法，预期收到 method not found"
+[tools.input_schema]
+type = "object"
+
+[[tools]]
+name = "caller:recurse"
+description = "经 host/callTool 调用自身，用于测试调用深度上限"
+[tools.input_schema]
+type = "object"
+
+[capabilities]
+permissions = []
+
+[lifecycle]
+mode = "on-demand"
+idle_timeout_sec = 300
+restart_policy = "on-failure"

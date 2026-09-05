@@ -16,8 +16,9 @@
 
 #![allow(dead_code)]
 
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
 use serde::Deserialize;
@@ -30,8 +31,8 @@ use crate::protocol::manifest::{
     negotiate_version, Lifecycle, LifecycleMode, ProtocolVersion, ToolDescriptor,
 };
 use crate::protocol::message::{
-    IncomingMessage, JsonRpcError, JsonRpcNotification, JsonRpcRequest, OutgoingMessage, RequestId,
-    ResponseBody,
+    IncomingMessage, JsonRpcError, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse,
+    OutgoingMessage, RequestId, ResponseBody,
 };
 
 use super::transport::{PendingTable, Transport, TransportError};
@@ -50,6 +51,64 @@ pub const METHOD_HELLO: &str = "plugin/hello";
 
 /// 宿主就绪方法名：宿主 → 插件，请求。
 pub const METHOD_READY: &str = "plugin/ready";
+
+/// 反向 RPC 的方法名前缀。插件发来的请求只有以此开头才会被受理。
+pub const HOST_METHOD_PREFIX: &str = "host/";
+
+/// 反向 RPC 方法名（设计文档 §5.3 的五项）。
+pub const HOST_LIST_TOOLS: &str = "host/listTools";
+pub const HOST_CALL_TOOL: &str = "host/callTool";
+pub const HOST_GET_CONFIG: &str = "host/getConfig";
+pub const HOST_SET_CONFIG: &str = "host/setConfig";
+pub const HOST_NOTIFY: &str = "host/notify";
+
+/// 插件推给 UI 的通知前缀（设计文档 §5.4：`notify/progress` 等）。
+pub const NOTIFY_PREFIX: &str = "notify/";
+
+// ─────────────────── 反向 RPC 宿主侧接口 ───────────────────
+
+/// 插件回调宿主的能力集合（设计文档 §5.3）。
+///
+/// 抽成 trait 而非让实例直接持有 `Supervisor`，有两个原因：
+///
+/// 1. **破循环引用**：`Supervisor` 持有 `Arc<PluginInstance>`，若实例反过来
+///    持有 `Arc<Supervisor>`，引用计数成环，两者永远不会被释放。实例侧一律
+///    用 [`std::sync::Weak`] 持有本 trait 对象。
+/// 2. **可测性**：实例的单测不必构造完整 `Supervisor`（那需要注册表、权限
+///    存储、传输工厂），注入一个记录调用的假实现即可。
+///
+/// `depth` 由**宿主**跟踪并传入，绝不接受插件在 params 里自报——否则插件
+/// 永远填 0 就能绕开 `MAX_CALL_DEPTH`，深度限制形同虚设。
+#[async_trait::async_trait]
+pub trait HostHandler: Send + Sync {
+    /// 列出全部可用工具，不唤醒任何插件。
+    async fn host_list_tools(&self) -> Result<JsonValue, JsonRpcError>;
+
+    /// 调用其他插件的工具。
+    ///
+    /// `caller_plugin` 是发起方插件 id，`depth` 是**发起方当前所处的调用深度**；
+    /// 实现方需以 `depth + 1` 构造 `CallerIdentity::Plugin` 后走完整六步调用链。
+    async fn host_call_tool(
+        &self,
+        caller_plugin: &str,
+        depth: u8,
+        tool: &str,
+        args: JsonValue,
+    ) -> Result<JsonValue, JsonRpcError>;
+
+    /// 读取该插件自己的配置。
+    async fn host_get_config(&self, caller_plugin: &str) -> Result<JsonValue, JsonRpcError>;
+
+    /// 写入该插件自己的配置。
+    async fn host_set_config(
+        &self,
+        caller_plugin: &str,
+        value: JsonValue,
+    ) -> Result<JsonValue, JsonRpcError>;
+
+    /// 插件推送给 UI 的通知。Phase 6 先落日志，Phase 7 接 Tauri 事件。
+    async fn host_notify(&self, caller_plugin: &str, method: &str, params: JsonValue);
+}
 
 /// 实例生命周期状态。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -147,6 +206,32 @@ struct InstanceInner {
     state: InstanceState,
     handshake: Option<HandshakeInfo>,
     last_error: Option<String>,
+    /// 在途**入站**调用的深度多重集：深度 → 该深度上的在途请求数。
+    ///
+    /// 插件发起 `host/callTool` 时，JSON-RPC 不提供"这条出站请求由哪条入站
+    /// 请求触发"的关联信息。因此取在途入站深度的**最大值**作为出站深度依据：
+    /// 递归链上的深度只增不减，最深的那条入站请求正是可能在递归的那条，
+    /// 取最大值绝不会低估，深度上限因而守得住。空集时为 0（插件自发调用）。
+    inbound_depths: BTreeMap<u8, u32>,
+}
+
+impl InstanceInner {
+    fn enter_inbound(&mut self, depth: u8) {
+        *self.inbound_depths.entry(depth).or_insert(0) += 1;
+    }
+
+    fn leave_inbound(&mut self, depth: u8) {
+        if let Some(count) = self.inbound_depths.get_mut(&depth) {
+            *count -= 1;
+            if *count == 0 {
+                self.inbound_depths.remove(&depth);
+            }
+        }
+    }
+
+    fn max_inbound_depth(&self) -> u8 {
+        self.inbound_depths.keys().next_back().copied().unwrap_or(0)
+    }
 }
 
 /// 一个插件子进程在宿主侧的抽象。
@@ -159,6 +244,13 @@ pub struct PluginInstance {
     transport: Arc<dyn Transport>,
     pending: Arc<PendingTable>,
     inner: Mutex<InstanceInner>,
+    /// 反向 RPC 的宿主回调。
+    ///
+    /// 必须是 [`Weak`]：`Supervisor` 持有 `Arc<PluginInstance>`，若这里用
+    /// `Arc<dyn HostHandler>` 则引用计数成环，两者永不释放。
+    /// `Option` 是因为 `Weak::new()` 要求 `T: Sized`，无法凭空造出
+    /// 空的 `Weak<dyn HostHandler>`。
+    host: Mutex<Option<Weak<dyn HostHandler>>>,
     /// 在途请求计数，用于 Idle ⇄ Busy 的转移。
     inflight: AtomicU64,
     /// 空闲计时的代次，每次活动自增使旧的计时任务作废。
@@ -192,11 +284,35 @@ impl PluginInstance {
                 state: InstanceState::Stopped,
                 handshake: None,
                 last_error: None,
+                inbound_depths: BTreeMap::new(),
             }),
+            host: Mutex::new(None),
             inflight: AtomicU64::new(0),
             idle_epoch: AtomicU64::new(0),
             reader: Mutex::new(None),
         }
+    }
+
+    /// 注入反向 RPC 的宿主回调。
+    ///
+    /// 必须在 `Arc::new(supervisor)` 之后调用：`Weak` 只能从既有的 `Arc`
+    /// 降级而来。未注入时插件发来的 `host/*` 请求会收到内部错误。
+    pub fn set_host(&self, host: Weak<dyn HostHandler>) {
+        *self.host.lock().unwrap_or_else(|e| e.into_inner()) = Some(host);
+    }
+
+    /// 取出宿主回调的强引用。宿主已析构或未注入时为 `None`。
+    fn host(&self) -> Option<Arc<dyn HostHandler>> {
+        self.host
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .and_then(Weak::upgrade)
+    }
+
+    /// 当前在途入站请求的最大深度快照，供出站 `host/callTool` 定深度。
+    pub fn current_inbound_depth(&self) -> u8 {
+        self.lock().max_inbound_depth()
     }
 
     pub fn plugin_id(&self) -> &str {
@@ -303,11 +419,12 @@ impl PluginInstance {
 
         let plugin_version = ProtocolVersion::parse(&hello.protocol_version)
             .map_err(|reason| InstanceError::VersionMismatch { reason })?;
-        let full_feature = negotiate_version(ProtocolVersion::V1_0, plugin_version).map_err(
-            |mismatch| InstanceError::VersionMismatch {
-                reason: mismatch.to_string(),
-            },
-        )?;
+        let full_feature =
+            negotiate_version(ProtocolVersion::V1_0, plugin_version).map_err(|mismatch| {
+                InstanceError::VersionMismatch {
+                    reason: mismatch.to_string(),
+                }
+            })?;
 
         let params = json!({ "config": config, "plugin_dir": plugin_dir });
         self.send_ready(params).await?;
@@ -374,6 +491,20 @@ impl PluginInstance {
         method: impl Into<String>,
         params: JsonValue,
     ) -> Result<JsonValue, InstanceError> {
+        self.call_at_depth(method, params, 0).await
+    }
+
+    /// 与 [`call`](Self::call) 相同，但额外声明**发起方所处的调用深度**。
+    ///
+    /// 这个深度是插件在处理本次请求期间发起 `host/callTool` 时的深度依据。
+    /// 深度必须由宿主传入：若改成让插件在 params 里自报，插件永远填 0
+    /// 就能绕开 `MAX_CALL_DEPTH`，深度限制形同虚设。
+    pub async fn call_at_depth(
+        self: &Arc<Self>,
+        method: impl Into<String>,
+        params: JsonValue,
+        inbound_depth: u8,
+    ) -> Result<JsonValue, InstanceError> {
         let method = method.into();
         let state = self.state();
         if !state.accepts_requests() {
@@ -386,7 +517,9 @@ impl PluginInstance {
         let rx = self.pending.register(id.clone())?;
 
         self.enter_busy();
+        self.lock().enter_inbound(inbound_depth);
         let result = self.call_inner(&method, params, id.clone(), rx).await;
+        self.lock().leave_inbound(inbound_depth);
         self.leave_busy();
 
         result
@@ -481,13 +614,123 @@ impl PluginInstance {
                 Ok(IncomingMessage::Response(resp)) => {
                     self.pending.complete(resp);
                 }
-                // 插件发来的请求（反向 RPC）与通知在 Phase 5 由 Supervisor 接管，
-                // 这里先安静丢弃，保证读循环不会因未知消息中断。
-                Ok(_) => {}
+                Ok(IncomingMessage::Request(req)) => {
+                    // 必须 spawn 而不能在此 await：处理 host/callTool 可能回过头
+                    // 来调用本插件，那条调用的响应要靠**本读循环**收取。若同步
+                    // 等待，读循环卡在等响应上，响应又永远读不到，必然死锁。
+                    let this = Arc::clone(&self);
+                    tokio::spawn(async move {
+                        this.dispatch_request(req).await;
+                    });
+                }
+                Ok(IncomingMessage::Notification(note)) => {
+                    let this = Arc::clone(&self);
+                    tokio::spawn(async move {
+                        this.dispatch_notification(note).await;
+                    });
+                }
                 Err(_) => break,
             }
         }
         self.on_disconnect();
+    }
+
+    /// 处理插件发来的反向 RPC 请求，并把结果写回通道。
+    async fn dispatch_request(self: Arc<Self>, req: JsonRpcRequest) {
+        let id = req.id.clone();
+        let outcome = self.handle_host_method(&req).await;
+        let response = match outcome {
+            Ok(value) => JsonRpcResponse::success(id, value),
+            Err(err) => JsonRpcResponse::error(Some(id), err),
+        };
+        // 发送失败说明通道已断，读循环随后自会走 on_disconnect，这里不必处理。
+        let _ = self
+            .transport
+            .send(OutgoingMessage::Response(response))
+            .await;
+    }
+
+    async fn handle_host_method(&self, req: &JsonRpcRequest) -> Result<JsonValue, JsonRpcError> {
+        if !req.method.starts_with(HOST_METHOD_PREFIX) {
+            return Err(JsonRpcError::new(
+                JsonRpcError::CODE_METHOD_NOT_FOUND,
+                format!("宿主不接受非 host/ 前缀的请求：{}", req.method),
+            ));
+        }
+
+        let host = self.host().ok_or_else(|| {
+            JsonRpcError::new(
+                JsonRpcError::CODE_INTERNAL_ERROR,
+                "宿主回调不可用，无法处理反向 RPC",
+            )
+        })?;
+        let params = req.params.clone().unwrap_or(JsonValue::Null);
+
+        match req.method.as_str() {
+            HOST_LIST_TOOLS => host.host_list_tools().await,
+            HOST_CALL_TOOL => {
+                let tool = params
+                    .get("name")
+                    .and_then(JsonValue::as_str)
+                    .ok_or_else(|| {
+                        JsonRpcError::new(
+                            JsonRpcError::CODE_INVALID_PARAMS,
+                            "host/callTool 缺少字符串字段 name",
+                        )
+                    })?;
+                let args = params
+                    .get("arguments")
+                    .cloned()
+                    .unwrap_or_else(|| json!({}));
+                // 深度取在途入站请求的最大值，绝不采信插件自报。
+                let depth = self.current_inbound_depth();
+                host.host_call_tool(&self.plugin_id, depth, tool, args)
+                    .await
+            }
+            HOST_GET_CONFIG => host.host_get_config(&self.plugin_id).await,
+            HOST_SET_CONFIG => host.host_set_config(&self.plugin_id, params).await,
+            HOST_NOTIFY => {
+                let method = params
+                    .get("method")
+                    .and_then(JsonValue::as_str)
+                    .ok_or_else(|| {
+                        JsonRpcError::new(
+                            JsonRpcError::CODE_INVALID_PARAMS,
+                            "host/notify 缺少字符串字段 method",
+                        )
+                    })?;
+                let payload = params.get("params").cloned().unwrap_or_else(|| json!({}));
+                host.host_notify(&self.plugin_id, method, payload).await;
+                Ok(json!({}))
+            }
+            other => Err(JsonRpcError::new(
+                JsonRpcError::CODE_METHOD_NOT_FOUND,
+                format!("未知的宿主方法：{other}"),
+            )),
+        }
+    }
+
+    /// 处理插件发来的通知。`notify/*` 转交宿主推给 UI，其余落日志即可。
+    async fn dispatch_notification(self: Arc<Self>, note: JsonRpcNotification) {
+        if !note.method.starts_with(NOTIFY_PREFIX) {
+            tracing::debug!(
+                plugin = %self.plugin_id,
+                method = %note.method,
+                "忽略插件发来的未知通知"
+            );
+            return;
+        }
+        let Some(host) = self.host() else {
+            tracing::warn!(
+                plugin = %self.plugin_id,
+                method = %note.method,
+                "宿主回调不可用，通知被丢弃"
+            );
+            return;
+        };
+        let params = note.params.clone().unwrap_or_else(|| json!({}));
+        host.host_notify(&self.plugin_id, &note.method, params)
+            .await;
     }
 
     /// 传输断开：让所有待响应请求一起失败，并把状态推进到终态。
@@ -622,7 +865,10 @@ mod tests {
             json!([{ "name": "demo:echo", "description": "回声" }]),
         );
 
-        let info = instance.start(json!({"k": 1}), "/plugins/demo").await.unwrap();
+        let info = instance
+            .start(json!({"k": 1}), "/plugins/demo")
+            .await
+            .unwrap();
 
         assert_eq!(info.protocol_version, ProtocolVersion::V1_0);
         assert_eq!(info.tools.len(), 1);
@@ -637,7 +883,10 @@ mod tests {
         let (instance, mock) = instance_with(Lifecycle::default());
         preload_handshake(&mock, "1.0", json!([]));
 
-        instance.start(json!({"token": "abc"}), "/plugins/demo").await.unwrap();
+        instance
+            .start(json!({"token": "abc"}), "/plugins/demo")
+            .await
+            .unwrap();
 
         let sent = mock.next_sent().await.unwrap();
         let OutgoingMessage::Request(req) = sent else {
@@ -653,7 +902,10 @@ mod tests {
     async fn 十秒内收不到_hello_判定握手超时() {
         let (instance, _mock) = instance_with(Lifecycle::default());
 
-        let err = instance.start(json!({}), "/plugins/demo").await.unwrap_err();
+        let err = instance
+            .start(json!({}), "/plugins/demo")
+            .await
+            .unwrap_err();
 
         assert_eq!(err, InstanceError::HandshakeTimeout { seconds: 10 });
         assert_eq!(instance.state(), InstanceState::Error);
@@ -679,7 +931,10 @@ mod tests {
         let (instance, mock) = instance_with(Lifecycle::default());
         mock.push_incoming(hello("2.0", json!([])));
 
-        let err = instance.start(json!({}), "/plugins/demo").await.unwrap_err();
+        let err = instance
+            .start(json!({}), "/plugins/demo")
+            .await
+            .unwrap_err();
 
         assert!(matches!(err, InstanceError::VersionMismatch { .. }));
         assert_eq!(instance.state(), InstanceState::Error);
@@ -693,7 +948,10 @@ mod tests {
             json!({"tools": []}),
         )));
 
-        let err = instance.start(json!({}), "/plugins/demo").await.unwrap_err();
+        let err = instance
+            .start(json!({}), "/plugins/demo")
+            .await
+            .unwrap_err();
 
         assert!(matches!(err, InstanceError::Handshake { .. }));
         assert_eq!(instance.state(), InstanceState::Error);
@@ -932,5 +1190,518 @@ mod tests {
         assert!(InstanceState::Stopped.is_terminal());
         assert!(InstanceState::Error.is_terminal());
         assert!(!InstanceState::Idle.is_terminal());
+    }
+
+    // ===== 反向 RPC（设计文档 §5.3 / §5.4）=====
+
+    /// 宿主收到的一次回调，字段全展开以便测试逐项断言。
+    #[derive(Debug, Clone, PartialEq)]
+    enum HostCall {
+        ListTools,
+        CallTool {
+            caller: String,
+            depth: u8,
+            tool: String,
+            args: JsonValue,
+        },
+        GetConfig {
+            caller: String,
+        },
+        SetConfig {
+            caller: String,
+            value: JsonValue,
+        },
+        Notify {
+            caller: String,
+            method: String,
+            params: JsonValue,
+        },
+    }
+
+    /// 只记账、不做事的假宿主。`HostHandler` 抽成 trait 就是为了让实例侧
+    /// 的反向 RPC 能脱离 `Supervisor` 单独验证。
+    #[derive(Default)]
+    struct RecordingHost {
+        calls: Mutex<Vec<HostCall>>,
+        fail: bool,
+    }
+
+    impl RecordingHost {
+        fn new() -> Arc<Self> {
+            Arc::new(Self::default())
+        }
+
+        /// 让 `host_list_tools` 返回错误，用于验证错误原样写回。
+        fn failing() -> Arc<Self> {
+            Arc::new(Self {
+                calls: Mutex::new(Vec::new()),
+                fail: true,
+            })
+        }
+
+        fn calls(&self) -> Vec<HostCall> {
+            self.calls.lock().unwrap_or_else(|e| e.into_inner()).clone()
+        }
+
+        fn record(&self, call: HostCall) {
+            self.calls
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push(call);
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl HostHandler for RecordingHost {
+        async fn host_list_tools(&self) -> Result<JsonValue, JsonRpcError> {
+            self.record(HostCall::ListTools);
+            if self.fail {
+                return Err(JsonRpcError::new(
+                    JsonRpcError::CODE_TOOL_NOT_FOUND,
+                    "宿主拒绝列举",
+                ));
+            }
+            Ok(json!([{ "name": "demo:echo" }]))
+        }
+
+        async fn host_call_tool(
+            &self,
+            caller_plugin: &str,
+            depth: u8,
+            tool: &str,
+            args: JsonValue,
+        ) -> Result<JsonValue, JsonRpcError> {
+            self.record(HostCall::CallTool {
+                caller: caller_plugin.to_string(),
+                depth,
+                tool: tool.to_string(),
+                args,
+            });
+            Ok(json!({ "called": tool }))
+        }
+
+        async fn host_get_config(&self, caller_plugin: &str) -> Result<JsonValue, JsonRpcError> {
+            self.record(HostCall::GetConfig {
+                caller: caller_plugin.to_string(),
+            });
+            Ok(json!({ "theme": "dark" }))
+        }
+
+        async fn host_set_config(
+            &self,
+            caller_plugin: &str,
+            value: JsonValue,
+        ) -> Result<JsonValue, JsonRpcError> {
+            self.record(HostCall::SetConfig {
+                caller: caller_plugin.to_string(),
+                value,
+            });
+            Ok(json!({}))
+        }
+
+        async fn host_notify(&self, caller_plugin: &str, method: &str, params: JsonValue) {
+            self.record(HostCall::Notify {
+                caller: caller_plugin.to_string(),
+                method: method.to_string(),
+                params,
+            });
+        }
+    }
+
+    /// 握手完成并注入假宿主。
+    ///
+    /// 返回的 `Arc<RecordingHost>` 必须由测试持有到最后：实例侧存的是 `Weak`，
+    /// 强引用一掉，反向调用立刻退化成「宿主不可用」。
+    async fn started_with_host(
+        lifecycle: Lifecycle,
+    ) -> (Arc<PluginInstance>, Arc<MockTransport>, Arc<RecordingHost>) {
+        let (instance, mock) = started(lifecycle).await;
+        let host = RecordingHost::new();
+        let weak = Arc::downgrade(&(Arc::clone(&host) as Arc<dyn HostHandler>));
+        instance.set_host(weak);
+        (instance, mock, host)
+    }
+
+    /// 模拟插件发起一次反向请求，取回宿主写到通道上的响应体。
+    async fn reverse_call(mock: &MockTransport, method: &str, params: JsonValue) -> ResponseBody {
+        mock.push_incoming(IncomingMessage::Request(JsonRpcRequest::new(
+            77_i64, method, params,
+        )));
+        match mock.next_sent().await.expect("宿主应写回响应") {
+            OutgoingMessage::Response(resp) => {
+                assert_eq!(
+                    resp.id,
+                    Some(RequestId::Int(77)),
+                    "响应必须回填插件发来的请求 ID"
+                );
+                resp.body
+            }
+            other => panic!("期望响应，实际为 {other:?}"),
+        }
+    }
+
+    fn expect_success(body: ResponseBody) -> JsonValue {
+        match body {
+            ResponseBody::Success { result } => result,
+            ResponseBody::Error { error } => panic!("期望成功，实际为错误：{error:?}"),
+        }
+    }
+
+    fn expect_error(body: ResponseBody) -> JsonRpcError {
+        match body {
+            ResponseBody::Error { error } => error,
+            ResponseBody::Success { result } => panic!("期望错误，实际为成功：{result}"),
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn 反向列举工具被转交宿主并写回结果() {
+        let (_instance, mock, host) = started_with_host(Lifecycle::default()).await;
+
+        let result = expect_success(reverse_call(&mock, HOST_LIST_TOOLS, json!({})).await);
+
+        assert_eq!(result, json!([{ "name": "demo:echo" }]));
+        assert_eq!(host.calls(), vec![HostCall::ListTools]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn 反向调用工具提取工具名与参数() {
+        let (_instance, mock, host) = started_with_host(Lifecycle::default()).await;
+
+        let result = expect_success(
+            reverse_call(
+                &mock,
+                HOST_CALL_TOOL,
+                json!({ "name": "demo:echo", "arguments": { "text": "hi" } }),
+            )
+            .await,
+        );
+
+        assert_eq!(result, json!({ "called": "demo:echo" }));
+        assert_eq!(
+            host.calls(),
+            vec![HostCall::CallTool {
+                caller: "com.example.demo".to_string(),
+                depth: 0,
+                tool: "demo:echo".to_string(),
+                args: json!({ "text": "hi" }),
+            }]
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn 反向调用工具省略参数时按空对象处理() {
+        let (_instance, mock, host) = started_with_host(Lifecycle::default()).await;
+
+        expect_success(reverse_call(&mock, HOST_CALL_TOOL, json!({ "name": "demo:echo" })).await);
+
+        assert_eq!(
+            host.calls(),
+            vec![HostCall::CallTool {
+                caller: "com.example.demo".to_string(),
+                depth: 0,
+                tool: "demo:echo".to_string(),
+                args: json!({}),
+            }]
+        );
+    }
+
+    /// 深度限制的命门：插件可以在 params 里随便写 depth，宿主一概不看，
+    /// 只认自己记的在途入站深度。否则插件永远填 0 即可无限递归。
+    #[tokio::test(start_paused = true)]
+    async fn 反向调用工具的深度取自在途入站请求而非插件自报() {
+        let (instance, mock, host) = started_with_host(Lifecycle::default()).await;
+
+        // 宿主以深度 3 调用本插件，插件在处理期间回调 host/callTool。
+        let caller = tokio::spawn({
+            let instance = Arc::clone(&instance);
+            async move { instance.call_at_depth("demo:outer", json!({}), 3).await }
+        });
+        let id = next_request_id(&mock).await;
+
+        expect_success(
+            reverse_call(
+                &mock,
+                HOST_CALL_TOOL,
+                json!({ "name": "demo:inner", "arguments": {}, "depth": 0 }),
+            )
+            .await,
+        );
+
+        mock.push_incoming(IncomingMessage::Response(JsonRpcResponse::success(
+            id,
+            json!({}),
+        )));
+        caller.await.unwrap().unwrap();
+
+        assert_eq!(
+            host.calls(),
+            vec![HostCall::CallTool {
+                caller: "com.example.demo".to_string(),
+                depth: 3,
+                tool: "demo:inner".to_string(),
+                args: json!({}),
+            }]
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn 反向调用工具缺少工具名返回参数错误() {
+        let (_instance, mock, host) = started_with_host(Lifecycle::default()).await;
+
+        let err = expect_error(reverse_call(&mock, HOST_CALL_TOOL, json!({ "name": 42 })).await);
+
+        assert_eq!(err.code, JsonRpcError::CODE_INVALID_PARAMS);
+        assert_eq!(err.message, "host/callTool 缺少字符串字段 name");
+        assert!(host.calls().is_empty(), "参数不合法时不应惊动宿主");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn 反向获取配置透传插件身份() {
+        let (_instance, mock, host) = started_with_host(Lifecycle::default()).await;
+
+        let result = expect_success(reverse_call(&mock, HOST_GET_CONFIG, json!({})).await);
+
+        assert_eq!(result, json!({ "theme": "dark" }));
+        assert_eq!(
+            host.calls(),
+            vec![HostCall::GetConfig {
+                caller: "com.example.demo".to_string(),
+            }]
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn 反向设置配置把整段参数交给宿主() {
+        let (_instance, mock, host) = started_with_host(Lifecycle::default()).await;
+
+        expect_success(reverse_call(&mock, HOST_SET_CONFIG, json!({ "theme": "light" })).await);
+
+        assert_eq!(
+            host.calls(),
+            vec![HostCall::SetConfig {
+                caller: "com.example.demo".to_string(),
+                value: json!({ "theme": "light" }),
+            }]
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn 反向notify提取方法名与载荷() {
+        let (_instance, mock, host) = started_with_host(Lifecycle::default()).await;
+
+        let result = expect_success(
+            reverse_call(
+                &mock,
+                HOST_NOTIFY,
+                json!({ "method": "notify/progress", "params": { "pct": 42 } }),
+            )
+            .await,
+        );
+
+        assert_eq!(result, json!({}));
+        assert_eq!(
+            host.calls(),
+            vec![HostCall::Notify {
+                caller: "com.example.demo".to_string(),
+                method: "notify/progress".to_string(),
+                params: json!({ "pct": 42 }),
+            }]
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn 反向notify缺少方法名返回参数错误() {
+        let (_instance, mock, host) = started_with_host(Lifecycle::default()).await;
+
+        let err = expect_error(reverse_call(&mock, HOST_NOTIFY, json!({ "params": {} })).await);
+
+        assert_eq!(err.code, JsonRpcError::CODE_INVALID_PARAMS);
+        assert_eq!(err.message, "host/notify 缺少字符串字段 method");
+        assert!(host.calls().is_empty());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn 未知的host方法返回方法不存在() {
+        let (_instance, mock, host) = started_with_host(Lifecycle::default()).await;
+
+        let err = expect_error(reverse_call(&mock, "host/rmrf", json!({})).await);
+
+        assert_eq!(err.code, JsonRpcError::CODE_METHOD_NOT_FOUND);
+        assert_eq!(err.message, "未知的宿主方法：host/rmrf");
+        assert!(host.calls().is_empty());
+    }
+
+    /// 插件只能走 `host/` 这一个入口，不得反过来调 `tools/call` 之类的宿主内部方法。
+    #[tokio::test(start_paused = true)]
+    async fn 非host前缀的反向请求被拒绝() {
+        let (_instance, mock, host) = started_with_host(Lifecycle::default()).await;
+
+        let err = expect_error(reverse_call(&mock, "tools/call", json!({})).await);
+
+        assert_eq!(err.code, JsonRpcError::CODE_METHOD_NOT_FOUND);
+        assert_eq!(err.message, "宿主不接受非 host/ 前缀的请求：tools/call");
+        assert!(host.calls().is_empty());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn 未注入宿主时反向请求返回内部错误() {
+        let (_instance, mock) = started(Lifecycle::default()).await;
+
+        let err = expect_error(reverse_call(&mock, HOST_LIST_TOOLS, json!({})).await);
+
+        assert_eq!(err.code, JsonRpcError::CODE_INTERNAL_ERROR);
+        assert_eq!(err.message, "宿主回调不可用，无法处理反向 RPC");
+    }
+
+    /// `Weak` 是有意为之：宿主一旦析构，实例不得靠悬垂引用继续跑。
+    #[tokio::test(start_paused = true)]
+    async fn 宿主析构后反向请求返回内部错误() {
+        let (instance, mock) = started(Lifecycle::default()).await;
+        let host = RecordingHost::new();
+        let weak = Arc::downgrade(&(Arc::clone(&host) as Arc<dyn HostHandler>));
+        instance.set_host(weak);
+        drop(host);
+
+        let err = expect_error(reverse_call(&mock, HOST_LIST_TOOLS, json!({})).await);
+
+        assert_eq!(err.code, JsonRpcError::CODE_INTERNAL_ERROR);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn 宿主返回的错误原样写回插件() {
+        let (instance, mock) = started(Lifecycle::default()).await;
+        let host = RecordingHost::failing();
+        let weak = Arc::downgrade(&(Arc::clone(&host) as Arc<dyn HostHandler>));
+        instance.set_host(weak);
+
+        let err = expect_error(reverse_call(&mock, HOST_LIST_TOOLS, json!({})).await);
+
+        assert_eq!(err.code, JsonRpcError::CODE_TOOL_NOT_FOUND);
+        assert_eq!(err.message, "宿主拒绝列举");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn notify前缀的通知被转交宿主() {
+        let (_instance, mock, host) = started_with_host(Lifecycle::default()).await;
+
+        mock.push_incoming(IncomingMessage::Notification(JsonRpcNotification::new(
+            "notify/toast",
+            json!({ "text": "完成" }),
+        )));
+        // 通知无响应可等，借一次往返把派发任务推进完。
+        expect_success(reverse_call(&mock, HOST_LIST_TOOLS, json!({})).await);
+
+        assert_eq!(
+            host.calls(),
+            vec![
+                HostCall::Notify {
+                    caller: "com.example.demo".to_string(),
+                    method: "notify/toast".to_string(),
+                    params: json!({ "text": "完成" }),
+                },
+                HostCall::ListTools,
+            ]
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn 非notify前缀的通知被忽略() {
+        let (_instance, mock, host) = started_with_host(Lifecycle::default()).await;
+
+        mock.push_incoming(IncomingMessage::Notification(JsonRpcNotification::new(
+            "plugin/whatever",
+            json!({}),
+        )));
+        expect_success(reverse_call(&mock, HOST_LIST_TOOLS, json!({})).await);
+
+        assert_eq!(
+            host.calls(),
+            vec![HostCall::ListTools],
+            "未知前缀的通知不应转交宿主"
+        );
+    }
+
+    /// 会回过头调用本实例的假宿主，用来钉死「读循环必须 spawn 派发」这条约束。
+    struct ReentrantHost {
+        instance: Mutex<Weak<PluginInstance>>,
+    }
+
+    impl ReentrantHost {
+        fn bind(instance: &Arc<PluginInstance>) -> Arc<Self> {
+            Arc::new(Self {
+                instance: Mutex::new(Arc::downgrade(instance)),
+            })
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl HostHandler for ReentrantHost {
+        async fn host_list_tools(&self) -> Result<JsonValue, JsonRpcError> {
+            Ok(json!([]))
+        }
+
+        async fn host_call_tool(
+            &self,
+            _caller_plugin: &str,
+            _depth: u8,
+            tool: &str,
+            args: JsonValue,
+        ) -> Result<JsonValue, JsonRpcError> {
+            let instance = self
+                .instance
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .upgrade()
+                .expect("实例应存活");
+            instance
+                .call(tool, args)
+                .await
+                .map_err(|e| JsonRpcError::new(JsonRpcError::CODE_PLUGIN_ERROR, e.to_string()))
+        }
+
+        async fn host_get_config(&self, _caller_plugin: &str) -> Result<JsonValue, JsonRpcError> {
+            Ok(json!({}))
+        }
+
+        async fn host_set_config(
+            &self,
+            _caller_plugin: &str,
+            _value: JsonValue,
+        ) -> Result<JsonValue, JsonRpcError> {
+            Ok(json!({}))
+        }
+
+        async fn host_notify(&self, _caller_plugin: &str, _method: &str, _params: JsonValue) {}
+    }
+
+    /// 插件 → 宿主 → 同一个插件的自递归。若 `read_loop` 同步 await 派发，
+    /// 内层调用的响应就没人收，必然超时——这条测试专门盯住那个回归。
+    #[tokio::test(start_paused = true)]
+    async fn 反向调用递归回本插件时读循环不死锁() {
+        let (instance, mock) = started(Lifecycle::default()).await;
+        let host = ReentrantHost::bind(&instance);
+        let weak = Arc::downgrade(&(Arc::clone(&host) as Arc<dyn HostHandler>));
+        instance.set_host(weak);
+
+        mock.push_incoming(IncomingMessage::Request(JsonRpcRequest::new(
+            77_i64,
+            HOST_CALL_TOOL,
+            json!({ "name": "demo:echo", "arguments": { "n": 1 } }),
+        )));
+
+        // 宿主回调本插件产生的出站请求，其响应必须由同一个读循环收取。
+        let id = next_request_id(&mock).await;
+        mock.push_incoming(IncomingMessage::Response(JsonRpcResponse::success(
+            id,
+            json!({ "n": 1 }),
+        )));
+
+        match mock.next_sent().await.expect("反向调用应有响应写回") {
+            OutgoingMessage::Response(resp) => {
+                assert_eq!(expect_success(resp.body), json!({ "n": 1 }));
+            }
+            other => panic!("期望响应，实际为 {other:?}"),
+        }
     }
 }

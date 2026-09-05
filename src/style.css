@@ -7,6 +7,7 @@
   --accent: #4f8ef7;
   --danger: #e5534b;
   --ok: #3fb950;
+  --warn: #d29922;
 }
 
 * {
@@ -69,8 +70,15 @@ body {
   display: none;
 }
 
+/* 对话页要让回复区吃满剩余高度，所以激活态用 flex 而非 block。 */
 .view.active {
   display: block;
+}
+
+#view-chat.active {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 h2 {
@@ -79,8 +87,557 @@ h2 {
   font-weight: 600;
 }
 
+h3 {
+  margin: 22px 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-dim);
+}
+
 .hint {
   color: var(--fg-dim);
   font-size: 13px;
   margin: 0 0 16px;
+}
+
+.view-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* 标题栏右侧的按钮组。`.view-head` 本身是 flex，包一层 div 会让内部按钮竖排，
+   所以这里必须自己再声明一次横向排列。 */
+.head-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.mono {
+  font-family: Consolas, "Cascadia Mono", monospace;
+}
+
+code {
+  font-family: Consolas, "Cascadia Mono", monospace;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 12px;
+}
+
+/* ─────────── 按钮 ─────────── */
+
+.btn {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 5px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--fg-dim);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.btn.danger {
+  color: var(--danger);
+}
+
+/* ─────────── 列表 ─────────── */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+
+.card.removed {
+  opacity: 0.5;
+}
+
+.card.error {
+  border-color: var(--danger);
+}
+
+/* 审计行：grid 排开列，避免长参数被 wrap 成一团。
+   6 列：调用方 / 工具 / 时间 / 耗时 / 结果 / 参数摘要 */
+.card.audit {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) minmax(160px, 2fr) minmax(160px, auto) auto auto 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+}
+
+.card.audit strong {
+  font-weight: 600;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title {
+  font-weight: 600;
+}
+
+.card-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.card-meta {
+  color: var(--fg-dim);
+  font-size: 12px;
+  margin-top: 4px;
+  word-break: break-all;
+}
+
+.card-error {
+  color: var(--danger);
+  font-size: 12px;
+  margin-top: 6px;
+  word-break: break-all;
+}
+
+.empty {
+  color: var(--fg-dim);
+  font-size: 13px;
+  padding: 14px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  text-align: center;
+}
+
+/* ─────────── 状态徽标 ─────────── */
+
+.badge {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  color: var(--fg-dim);
+}
+
+.badge.idle,
+.badge.busy {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.badge.starting,
+.badge.stopping {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
+.badge.error {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.badge.medium {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
+.badge.high {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.badge.disabled {
+  color: var(--fg-dim);
+  background: var(--bg-elevated);
+}
+
+/* 「启用」按钮在被禁用态下加 muted 修饰类，让它读起来像「点击启用」而非「再次禁用」。 */
+.btn.muted {
+  color: var(--fg-dim);
+  border-color: var(--border);
+}
+
+/* ─────────── 表单 ─────────── */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 560px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.field.checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.label {
+  font-size: 13px;
+  color: var(--fg-dim);
+}
+
+.field-hint {
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.field-hint.ok {
+  color: var(--ok);
+}
+
+.field-hint.warn {
+  color: var(--warn);
+}
+
+.input {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 6px 9px;
+  width: 100%;
+  resize: vertical;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.row .input {
+  flex: 1;
+}
+
+/* 配置片段是给人读、给人整段复制的，行高压紧、允许横向滚动而不折行，
+   免得 JSON 缩进被换行搅乱。 */
+.snippet {
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+/* ─────────── 对话页 ─────────── */
+
+.chat-log {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0 12px;
+}
+
+.chat-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.msg {
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 5px;
+  padding: 8px 11px;
+  background: var(--bg-elevated);
+}
+
+.msg-head {
+  font-size: 12px;
+  color: var(--fg-dim);
+  margin-bottom: 4px;
+}
+
+.msg-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 12.5px;
+  margin: 0;
+}
+
+.msg.call {
+  border-left-color: var(--accent);
+}
+
+.msg.result {
+  border-left-color: var(--ok);
+}
+
+.msg.error {
+  border-left-color: var(--danger);
+}
+
+.msg.notify {
+  border-left-color: var(--warn);
+}
+
+/* ─────────── 权限弹窗 ─────────── */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.modal-backdrop[hidden] {
+  display: none;
+}
+
+.modal {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px 20px;
+  width: 440px;
+  max-width: calc(100vw - 32px);
+}
+
+.modal h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  color: var(--fg);
+}
+
+.prompt-body {
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+
+.prompt-meta {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 4px 10px;
+  margin: 0 0 12px;
+  font-size: 12.5px;
+}
+
+.prompt-meta dt {
+  color: var(--fg-dim);
+}
+
+.prompt-meta dd {
+  margin: 0;
+  word-break: break-all;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ─────────── 快捷键与说明弹窗 ─────────── */
+
+/* 说明文档是插件作者写的，长度不可控，只能给个滚动上限。 */
+.modal.wide {
+  width: 660px;
+}
+
+/* 捕获框比普通按钮显眼些：它同时充当「当前值」的显示区。 */
+.keycap {
+  justify-content: center;
+  min-height: 34px;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+}
+
+.keycap.capturing {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.docs-body {
+  max-height: 60vh;
+  overflow-y: auto;
+  margin-bottom: 12px;
+  padding-right: 4px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.docs-body h1,
+.docs-body h2,
+.docs-body h3 {
+  margin: 14px 0 6px;
+  font-size: 14px;
+  color: var(--fg);
+}
+
+.docs-body h1:first-child {
+  margin-top: 0;
+}
+
+.docs-body p {
+  margin: 0 0 8px;
+}
+
+.docs-body ul {
+  margin: 0 0 8px;
+  padding-left: 20px;
+}
+
+.docs-body li {
+  margin-bottom: 3px;
+}
+
+.docs-body pre {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin: 0 0 8px;
+  overflow-x: auto;
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 12px;
+}
+
+/* 代码块容器：复制按钮钉在右上角 */
+.code-block {
+  position: relative;
+  margin: 0 0 8px;
+}
+
+.code-block pre {
+  margin: 0;
+}
+
+.copy-code {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg);
+  color: var(--fg-dim);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.code-block:hover .copy-code {
+  opacity: 1;
+}
+
+.copy-code:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* 文档搜索框 */
+.docs-search {
+  width: 100%;
+  margin-bottom: 8px;
+  box-sizing: border-box;
+}
+
+.docs-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 10px;
+  font-size: 12px;
+}
+
+.docs-table th,
+.docs-table td {
+  border: 1px solid var(--border);
+  padding: 5px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.docs-table th {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.docs-body hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 12px 0;
+}
+
+/* 快捷键总览的行：键位在左，插件名在右。 */
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.shortcut-row .keys {
+  min-width: 132px;
+}
+
+/* ─────────── 轻提示 ─────────── */
+
+.toast {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 16px;
+  max-width: 70vw;
+  z-index: 20;
+}
+
+.toast[hidden] {
+  display: none;
+}
+
+.toast.error {
+  border-color: var(--danger);
+  color: var(--danger);
 }

@@ -400,10 +400,7 @@ mod tests {
             "连接断开",
         ));
         let id = table.next_id();
-        assert_eq!(
-            table.register(id).unwrap_err(),
-            TransportError::Closed
-        );
+        assert_eq!(table.register(id).unwrap_err(), TransportError::Closed);
     }
 
     #[test]
@@ -496,11 +493,8 @@ mod tests {
     #[tokio::test]
     async fn 队列为空时接收保持挂起() {
         let transport = MockTransport::new();
-        let pending = tokio::time::timeout(
-            std::time::Duration::from_millis(20),
-            transport.recv(),
-        )
-        .await;
+        let pending =
+            tokio::time::timeout(std::time::Duration::from_millis(20), transport.recv()).await;
         assert!(pending.is_err(), "无消息且未断开时不应返回");
     }
 }

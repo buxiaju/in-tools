@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "主窗口所需的核心权限。事件订阅（core:event）是权限弹窗与插件通知能到达前端的前提，缺失时 listen() 会被 ACL 静默拒绝。托盘与菜单权限用于后台常驻；全局快捷键权限用于热键调用插件。",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:tray:default",
+    "core:menu:default",
+    "core:app:allow-default-window-icon",
+    "global-shortcut:default"
+  ]
+}

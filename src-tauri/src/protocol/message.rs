@@ -43,7 +43,10 @@ pub struct JsonRpcRequest {
     pub id: RequestId,
     pub method: String,
     /// 插件协议中 params 始终是对象；`Option` 用以支持省略。
-    #[serde(default = "default_empty_object", skip_serializing_if = "is_empty_object")]
+    #[serde(
+        default = "default_empty_object",
+        skip_serializing_if = "is_empty_object"
+    )]
     pub params: Option<JsonValue>,
 }
 
@@ -60,7 +63,11 @@ fn is_empty_object(v: &Option<JsonValue>) -> bool {
 
 impl JsonRpcRequest {
     /// 构造符合协议约定的请求：`jsonrpc` 固定为 `"2.0"`，`params` 默认为空对象。
-    pub fn new(id: impl Into<RequestId>, method: impl Into<String>, params: impl Into<JsonValue>) -> Self {
+    pub fn new(
+        id: impl Into<RequestId>,
+        method: impl Into<String>,
+        params: impl Into<JsonValue>,
+    ) -> Self {
         Self {
             jsonrpc: "2.0".to_string(),
             id: id.into(),
@@ -75,7 +82,10 @@ impl JsonRpcRequest {
 pub struct JsonRpcNotification {
     pub jsonrpc: String,
     pub method: String,
-    #[serde(default = "default_empty_object", skip_serializing_if = "is_empty_object")]
+    #[serde(
+        default = "default_empty_object",
+        skip_serializing_if = "is_empty_object"
+    )]
     pub params: Option<JsonValue>,
 }
 
@@ -100,7 +110,11 @@ pub struct JsonRpcError {
 
 impl JsonRpcError {
     pub fn new(code: i32, message: impl Into<String>) -> Self {
-        Self { code, message: message.into(), data: None }
+        Self {
+            code,
+            message: message.into(),
+            data: None,
+        }
     }
 
     // JSON-RPC 2.0 预定义错误码。
@@ -145,12 +159,18 @@ impl JsonRpcResponse {
         Self {
             jsonrpc: "2.0".to_string(),
             id: Some(id.into()),
-            body: ResponseBody::Success { result: result.into() },
+            body: ResponseBody::Success {
+                result: result.into(),
+            },
         }
     }
 
     pub fn error(id: Option<RequestId>, err: JsonRpcError) -> Self {
-        Self { jsonrpc: "2.0".to_string(), id, body: ResponseBody::Error { error: err } }
+        Self {
+            jsonrpc: "2.0".to_string(),
+            id,
+            body: ResponseBody::Error { error: err },
+        }
     }
 }
 
@@ -282,9 +302,8 @@ impl LineCodec {
                 continue;
             }
 
-            let text = String::from_utf8(line_vec).map_err(|_| {
-                MessageError::InvalidJson("该行不是合法 UTF-8".to_string())
-            })?;
+            let text = String::from_utf8(line_vec)
+                .map_err(|_| MessageError::InvalidJson("该行不是合法 UTF-8".to_string()))?;
 
             return match parse_one_line(&text) {
                 Ok(msg) => Ok(Some(msg)),
@@ -296,10 +315,12 @@ impl LineCodec {
 
 /// 把单行文本解析为 `IncomingMessage`。抽出纯函数以便单测。
 fn parse_one_line(text: &str) -> Result<IncomingMessage, MessageError> {
-    let value: JsonValue = serde_json::from_str(text)
-        .map_err(|e| MessageError::InvalidJson(format!("{}", e)))?;
+    let value: JsonValue =
+        serde_json::from_str(text).map_err(|e| MessageError::InvalidJson(format!("{}", e)))?;
 
-    let obj = value.as_object().ok_or(MessageError::InvalidJsonRpcVersion)?;
+    let obj = value
+        .as_object()
+        .ok_or(MessageError::InvalidJsonRpcVersion)?;
 
     // jsonrpc 字段必须为 "2.0"。
     match obj.get("jsonrpc").and_then(|v| v.as_str()) {
@@ -382,7 +403,10 @@ mod tests {
 
     #[test]
     fn response_success_round_trip() {
-        let resp = JsonRpcResponse::success(2i64, serde_json::json!({"text":"你好世界","confidence":0.98}));
+        let resp = JsonRpcResponse::success(
+            2i64,
+            serde_json::json!({"text":"你好世界","confidence":0.98}),
+        );
         let out = OutgoingMessage::Response(resp.clone());
         let line = out.to_line().unwrap();
         match parse_one_line(&line).unwrap() {
@@ -447,10 +471,7 @@ mod tests {
 
     #[test]
     fn parse_wrong_jsonrpc_version_is_rejected() {
-        let err = parse_one_line(
-            r#"{"jsonrpc":"1.0","id":1,"method":"foo"}"#,
-        )
-        .unwrap_err();
+        let err = parse_one_line(r#"{"jsonrpc":"1.0","id":1,"method":"foo"}"#).unwrap_err();
         assert!(matches!(err, MessageError::InvalidJsonRpcVersion));
     }
 
@@ -558,11 +579,7 @@ mod tests {
     #[test]
     fn linecodec_skips_blank_lines() {
         let mut codec = LineCodec::new();
-        let msg = OutgoingMessage::Request(JsonRpcRequest::new(
-            1i64,
-            "m",
-            serde_json::json!({}),
-        ));
+        let msg = OutgoingMessage::Request(JsonRpcRequest::new(1i64, "m", serde_json::json!({})));
         let bytes = encode_line(&msg).unwrap();
         let mut mixed = vec![];
         mixed.extend_from_slice(b"\n\n\r\n   \n"); // 多个空行，含 CRLF
@@ -617,11 +634,7 @@ mod tests {
 
     #[test]
     fn encode_line_appends_newline() {
-        let msg = OutgoingMessage::Request(JsonRpcRequest::new(
-            1i64,
-            "m",
-            serde_json::json!({}),
-        ));
+        let msg = OutgoingMessage::Request(JsonRpcRequest::new(1i64, "m", serde_json::json!({})));
         let bytes = encode_line(&msg).unwrap();
         assert_eq!(bytes.last(), Some(&b'\n'));
     }

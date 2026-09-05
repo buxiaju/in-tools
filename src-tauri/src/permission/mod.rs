@@ -1,4 +1,4 @@
-//! 权限层：调用方身份与三级危险度授权判定。
+﻿//! 权限层：调用方身份与三级危险度授权判定。
 //!
 //! 权限声明的粒度是**插件级**：`manifest.toml` 的 `[capabilities] permissions`
 //! 适用于该插件的所有工具，宿主不区分单个工具需要哪些权限。
@@ -226,10 +226,25 @@ pub struct PromptRequest {
     pub permission: Permission,
     pub danger: DangerLevel,
     pub caller: CallerIdentity,
+    /// 触发此次询问的工具名，形如 `ocr:recognize`。
+    ///
+    /// `None` 表示询问与具体工具无关（例如某个插件启动期的全局检查）。
+    /// 前端弹窗会把 `None` 渲染成「N/A」而非空白，避免让人怀疑是不是数据丢了。
+    pub tool: Option<String>,
+    /// 工具调用的参数摘要——给用户展示「为什么这次危险」。
+    ///
+    /// 由调用方在拼参数前手写一段可读摘要，比如写文件时给出路径和大小，
+    /// 而不是把整个 JSON 对象糊在弹窗里。
+    /// `None` 同上。
+    pub args_summary: Option<String>,
 }
 
 /// 用户对一次询问的答复。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// 带 serde 是因为它要从前端弹窗经 Tauri command 传回来；
+/// `kebab-case` 与 manifest 里其他枚举的约定保持一致。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum PromptDecision {
     /// 拒绝，且记住（永久拒绝）。
     DenyAlways,
@@ -247,6 +262,18 @@ pub enum PromptDecision {
 #[async_trait::async_trait]
 pub trait PermissionPrompter: Send + Sync {
     async fn ask(&self, request: &PromptRequest) -> PromptDecision;
+}
+
+/// 让 `Arc<P>` 自身也是一个询问器。
+///
+/// [`PermissionChecker`] 按值持有 prompter，但真实的询问器（如界面弹窗）往往还要
+/// 被 command 层共享以回填用户的答复。有了这层转发，同一个 `Arc` 既能交给
+/// checker、又能留在手上，无需把内部状态再包一层 `Arc<Mutex<..>>`。
+#[async_trait::async_trait]
+impl<P: PermissionPrompter + ?Sized> PermissionPrompter for std::sync::Arc<P> {
+    async fn ask(&self, request: &PromptRequest) -> PromptDecision {
+        (**self).ask(request).await
+    }
 }
 
 /// 总是给同一答复的询问器，供测试与无人值守场景使用。
@@ -286,14 +313,17 @@ impl<P: PermissionPrompter> PermissionChecker<P> {
     /// 校验插件声明的全部权限。任一项被拒即整体失败。
     ///
     /// 权限声明是插件级的，因此这里不接收工具名——宿主不区分单个工具需要哪些权限。
+    /// `tool` 与 `args_summary` 仅用于弹窗上下文展示，不参与校验逻辑。
     pub async fn check_all(
         &mut self,
         plugin_id: &str,
         declared: &[Permission],
         caller: &CallerIdentity,
+        tool: Option<&str>,
+        args_summary: Option<&str>,
     ) -> Result<(), PermissionError> {
         for permission in declared {
-            self.check_one(plugin_id, permission, caller).await?;
+            self.check_one(plugin_id, permission, caller, tool, args_summary).await?;
         }
         Ok(())
     }
@@ -303,6 +333,8 @@ impl<P: PermissionPrompter> PermissionChecker<P> {
         plugin_id: &str,
         permission: &Permission,
         caller: &CallerIdentity,
+        tool: Option<&str>,
+        args_summary: Option<&str>,
     ) -> Result<(), PermissionError> {
         let danger = permission.danger_level();
 
@@ -349,6 +381,8 @@ impl<P: PermissionPrompter> PermissionChecker<P> {
             permission: permission.clone(),
             danger,
             caller: caller.clone(),
+            tool: tool.map(str::to_string),
+            args_summary: args_summary.map(str::to_string),
         };
         let decision = self.prompter.ask(&request).await;
 
@@ -533,7 +567,7 @@ mod tests {
         let mut checker = PermissionChecker::new(store_in(&dir), &prompter);
 
         checker
-            .check_all("p.low", &[perm("network:http")], &CallerIdentity::Ui)
+            .check_all("p.low", &[perm("network:http")], &CallerIdentity::Ui, None, None)
             .await
             .expect("低危权限应直接放行");
 
@@ -549,13 +583,13 @@ mod tests {
         let p = perm("screen:capture");
 
         checker
-            .check_all("p.mid", std::slice::from_ref(&p), &CallerIdentity::Ui)
+            .check_all("p.mid", std::slice::from_ref(&p), &CallerIdentity::Ui, None, None)
             .await
             .unwrap();
         assert_eq!(prompter.count(), 1, "首次应询问");
 
         checker
-            .check_all("p.mid", std::slice::from_ref(&p), &CallerIdentity::Ui)
+            .check_all("p.mid", std::slice::from_ref(&p), &CallerIdentity::Ui, None, None)
             .await
             .unwrap();
         assert_eq!(prompter.count(), 1, "已永久授权后不应再次询问");
@@ -569,11 +603,11 @@ mod tests {
         let p = perm("input:control");
 
         checker
-            .check_all("p.high", std::slice::from_ref(&p), &CallerIdentity::Ui)
+            .check_all("p.high", std::slice::from_ref(&p), &CallerIdentity::Ui, None, None)
             .await
             .unwrap();
         checker
-            .check_all("p.high", std::slice::from_ref(&p), &CallerIdentity::Ui)
+            .check_all("p.high", std::slice::from_ref(&p), &CallerIdentity::Ui, None, None)
             .await
             .unwrap();
         assert_eq!(prompter.count(), 1, "同一会话内只询问一次");
@@ -581,7 +615,7 @@ mod tests {
         // 模拟宿主重启：会话记录清空。
         checker.store_mut().clear_session();
         checker
-            .check_all("p.high", std::slice::from_ref(&p), &CallerIdentity::Ui)
+            .check_all("p.high", std::slice::from_ref(&p), &CallerIdentity::Ui, None, None)
             .await
             .unwrap();
         assert_eq!(prompter.count(), 2, "新会话应重新询问");
@@ -596,7 +630,7 @@ mod tests {
             PermissionChecker::new(store_in(&dir), FixedPrompter(PromptDecision::DenyOnce));
 
         let err = checker
-            .check_all("p.deny", &[perm("screen:capture")], &CallerIdentity::Ui)
+            .check_all("p.deny", &[perm("screen:capture")], &CallerIdentity::Ui, None, None)
             .await
             .expect_err("用户拒绝后应返回错误");
 
@@ -617,10 +651,10 @@ mod tests {
         let p = perm("clipboard:read");
 
         let _ = checker
-            .check_all("p.once", std::slice::from_ref(&p), &CallerIdentity::Ui)
+            .check_all("p.once", std::slice::from_ref(&p), &CallerIdentity::Ui, None, None)
             .await;
         let _ = checker
-            .check_all("p.once", std::slice::from_ref(&p), &CallerIdentity::Ui)
+            .check_all("p.once", std::slice::from_ref(&p), &CallerIdentity::Ui, None, None)
             .await;
 
         assert_eq!(prompter.count(), 2, "DenyOnce 不应被记住");
@@ -638,10 +672,10 @@ mod tests {
         let p = perm("clipboard:write");
 
         let _ = checker
-            .check_all("p.always", std::slice::from_ref(&p), &CallerIdentity::Ui)
+            .check_all("p.always", std::slice::from_ref(&p), &CallerIdentity::Ui, None, None)
             .await;
         let err = checker
-            .check_all("p.always", std::slice::from_ref(&p), &CallerIdentity::Ui)
+            .check_all("p.always", std::slice::from_ref(&p), &CallerIdentity::Ui, None, None)
             .await
             .expect_err("应持续被拒");
 
@@ -665,6 +699,8 @@ mod tests {
                 "p.multi",
                 &[perm("network:http"), perm("screen:capture")],
                 &CallerIdentity::Ui,
+                None,
+                None,
             )
             .await
             .expect_err("含被拒权限时应整体失败");
@@ -691,7 +727,7 @@ mod tests {
             .unwrap();
 
         let err = checker
-            .check_all("p.hi", std::slice::from_ref(&p), &caller)
+            .check_all("p.hi", std::slice::from_ref(&p), &caller, None, None)
             .await
             .expect_err("高危权限不应对 MCP 暴露");
 
@@ -714,7 +750,7 @@ mod tests {
         };
 
         let err = checker
-            .check_all("p.mcp", &[perm("screen:capture")], &caller)
+            .check_all("p.mcp", &[perm("screen:capture")], &caller, None, None)
             .await
             .expect_err("无记录且不能询问时应拒绝");
 
@@ -745,6 +781,8 @@ mod tests {
                 &CallerIdentity::Mcp {
                     client_name: "claude".into(),
                 },
+                None,
+                None,
             )
             .await
             .expect("已授权的中危权限对 MCP 应放行");
@@ -778,7 +816,9 @@ mod tests {
         let p = perm("input:control");
 
         let mut store = PermissionStore::open_at(&path).unwrap();
-        store.record("p.sess", &p, GrantRecord::session(true)).unwrap();
+        store
+            .record("p.sess", &p, GrantRecord::session(true))
+            .unwrap();
         assert!(store.lookup("p.sess", &p).is_some(), "本会话内应可见");
 
         let reopened = PermissionStore::open_at(&path).unwrap();

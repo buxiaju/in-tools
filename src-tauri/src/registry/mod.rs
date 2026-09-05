@@ -7,11 +7,13 @@
 #![allow(dead_code)]
 
 use crate::protocol::manifest::{Manifest, ToolDescriptor};
-use crate::registry::discovery::{LoadedPlugin, LoadError, ScanEntry};
+use crate::registry::discovery::{LoadError, LoadedPlugin, ScanEntry};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 pub mod discovery;
+pub mod import;
+pub mod seed;
 
 /// 已成功加载、并且通过注册表"工具去重"规则的插件记录。
 #[derive(Debug, Clone)]
@@ -246,19 +248,12 @@ command = "python"
     #[test]
     fn registry_one_plugin_three_tools() {
         let tmp = tempdir().unwrap();
-        make_plugin(
-            tmp.path(),
-            "p",
-            &plugin_toml("com.example.one", "one", 3),
-        );
+        make_plugin(tmp.path(), "p", &plugin_toml("com.example.one", "one", 3));
         let reg = Registry::scan_and_build(tmp.path()).unwrap();
         assert_eq!(reg.len(), 1);
         let plugin = reg.get_plugin("com.example.one").unwrap();
         assert_eq!(plugin.tools.len(), 3);
-        assert_eq!(
-            reg.resolve_tool("one:t1").unwrap().id(),
-            "com.example.one"
-        );
+        assert_eq!(reg.resolve_tool("one:t1").unwrap().id(), "com.example.one");
         let all = reg.list_all_tools();
         assert_eq!(all.len(), 3);
         let names: Vec<_> = all.iter().map(|(_, t)| t.name.clone()).collect();
@@ -268,16 +263,8 @@ command = "python"
     #[test]
     fn registry_two_plugins_tools_merged() {
         let tmp = tempdir().unwrap();
-        make_plugin(
-            tmp.path(),
-            "a-dir",
-            &plugin_toml("com.example.a", "a", 2),
-        );
-        make_plugin(
-            tmp.path(),
-            "b-dir",
-            &plugin_toml("com.example.b", "b", 2),
-        );
+        make_plugin(tmp.path(), "a-dir", &plugin_toml("com.example.a", "a", 2));
+        make_plugin(tmp.path(), "b-dir", &plugin_toml("com.example.b", "b", 2));
         let reg = Registry::scan_and_build(tmp.path()).unwrap();
         assert_eq!(reg.len(), 2);
         let all_names: Vec<_> = reg
@@ -334,7 +321,10 @@ type = "object"
         // beta 丢掉 shared:t0，但保留 beta:own，所以 1 个。
         let beta = reg.get_plugin("com.example.beta").unwrap();
         assert_eq!(
-            beta.tools.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(),
+            beta.tools
+                .iter()
+                .map(|t| t.name.as_str())
+                .collect::<Vec<_>>(),
             ["beta:own"]
         );
         // 冲突表应有一条。
@@ -375,7 +365,7 @@ type = "object"
         assert_eq!(reg.len(), 1);
         let only = reg.get_plugin("com.example.same").unwrap();
         assert_eq!(only.tools.len(), 2); // "a" 家的工具
-        // 它的目录名应为 first-dir。
+                                         // 它的目录名应为 first-dir。
         assert!(only.plugin_dir.ends_with("first-dir"));
         // 冲突 1 条（* 表示整体拒绝）。
         assert_eq!(reg.conflicts().len(), 1);
@@ -387,11 +377,7 @@ type = "object"
     #[test]
     fn load_failures_collected_along_successes() {
         let tmp = tempdir().unwrap();
-        make_plugin(
-            tmp.path(),
-            "ok",
-            &plugin_toml("com.example.ok", "ok", 1),
-        );
+        make_plugin(tmp.path(), "ok", &plugin_toml("com.example.ok", "ok", 1));
         let missing = tmp.path().join("missing-manifest");
         fs::create_dir_all(&missing).unwrap(); // 没有 manifest.toml
         let reg = Registry::scan_and_build(tmp.path()).unwrap();
@@ -410,11 +396,7 @@ type = "object"
     #[test]
     fn insert_loaded_after_new_dir_created() {
         let tmp = tempdir().unwrap();
-        make_plugin(
-            tmp.path(),
-            "a",
-            &plugin_toml("com.example.a", "a", 1),
-        );
+        make_plugin(tmp.path(), "a", &plugin_toml("com.example.a", "a", 1));
         let mut reg = Registry::scan_and_build(tmp.path()).unwrap();
         assert_eq!(reg.len(), 1);
 
@@ -472,9 +454,18 @@ command = "python"
         assert!(sample.contains("[[tools]]"));
         assert_eq!(sample.matches("name = \"tool:").count(), 2);
         let parsed: Manifest = crate::protocol::manifest::load_from_str(&sample).unwrap();
-        assert_eq!(parsed.tools.len(), 2, "预验证失败：sample.tools={:?}", parsed.tools);
+        assert_eq!(
+            parsed.tools.len(),
+            2,
+            "预验证失败：sample.tools={:?}",
+            parsed.tools
+        );
 
-        make_plugin(tmp.path(), "z", &toml("com.example.z", &["tool:c", "tool:a"]));
+        make_plugin(
+            tmp.path(),
+            "z",
+            &toml("com.example.z", &["tool:c", "tool:a"]),
+        );
         make_plugin(tmp.path(), "a", &toml("com.example.a2", &["tool:b"]));
         let reg = Registry::scan_and_build(tmp.path()).unwrap();
         let names: Vec<_> = reg
@@ -516,11 +507,7 @@ command = "python"
     #[test]
     fn resolve_unknown_tool_returns_none() {
         let tmp = tempdir().unwrap();
-        make_plugin(
-            tmp.path(),
-            "p",
-            &plugin_toml("com.example.x", "x", 1),
-        );
+        make_plugin(tmp.path(), "p", &plugin_toml("com.example.x", "x", 1));
         let reg = Registry::scan_and_build(tmp.path()).unwrap();
         assert!(reg.resolve_tool("nonexistent:foo").is_none());
         assert!(reg.get_plugin("does.not.exist").is_none());
@@ -531,16 +518,8 @@ command = "python"
     #[test]
     fn plugin_ids_btreeset_matches() {
         let tmp = tempdir().unwrap();
-        make_plugin(
-            tmp.path(),
-            "p1",
-            &plugin_toml("com.example.p1", "p1", 0),
-        );
-        make_plugin(
-            tmp.path(),
-            "p2",
-            &plugin_toml("com.example.p2", "p2", 0),
-        );
+        make_plugin(tmp.path(), "p1", &plugin_toml("com.example.p1", "p1", 0));
+        make_plugin(tmp.path(), "p2", &plugin_toml("com.example.p2", "p2", 0));
         let reg = Registry::scan_and_build(tmp.path()).unwrap();
         let ids = reg.plugin_ids();
         assert!(ids.contains("com.example.p1"));
