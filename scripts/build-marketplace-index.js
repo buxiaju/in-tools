@@ -30,6 +30,7 @@ function scanPlugins() {
   const plugins = [];
   const pluginDirs = ['system', 'test', 'user'];
 
+  // 扫描指定目录下的插件
   for (const dir of pluginDirs) {
     const dirPath = path.join(PLUGINS_DIR, dir);
     if (!fs.existsSync(dirPath)) continue;
@@ -88,6 +89,70 @@ function scanPlugins() {
       } catch (error) {
         console.error(`Error parsing ${manifestPath}:`, error.message);
       }
+    }
+  }
+
+  // 扫描 plugins/ 目录下的直接插件（兼容旧结构）
+  const directEntries = fs.readdirSync(PLUGINS_DIR, { withFileTypes: true });
+  for (const entry of directEntries) {
+    if (!entry.isDirectory()) continue;
+    if (pluginDirs.includes(entry.name)) continue; // 跳过已扫描的目录
+
+    const pluginPath = path.join(PLUGINS_DIR, entry.name);
+    const manifestPath = path.join(pluginPath, 'manifest.toml');
+
+    if (!fs.existsSync(manifestPath)) continue;
+
+    // 检查是否已经在子目录中扫描过
+    const pluginId = entry.name;
+    if (plugins.some(p => p.id === pluginId || p.id.endsWith(`.${pluginId}`))) {
+      continue;
+    }
+
+    try {
+      const manifestContent = fs.readFileSync(manifestPath, 'utf-8');
+      const manifest = toml.parse(manifestContent);
+
+      // 读取 README（如果存在）
+      let readme = '';
+      const readmePath = path.join(pluginPath, 'README.md');
+      if (fs.existsSync(readmePath)) {
+        readme = fs.readFileSync(readmePath, 'utf-8');
+      }
+
+      // 计算文件大小
+      let totalSize = 0;
+      const files = fs.readdirSync(pluginPath);
+      for (const file of files) {
+        const filePath = path.join(pluginPath, file);
+        const stat = fs.statSync(filePath);
+        if (stat.isFile()) {
+          totalSize += stat.size;
+        }
+      }
+
+      plugins.push({
+        id: manifest.plugin.id,
+        name: manifest.plugin.name,
+        version: manifest.plugin.version,
+        description: manifest.plugin.description || '',
+        author: manifest.plugin.author || '',
+        category: 'direct',
+        tags: extractTags(manifest),
+        homepage: `https://github.com/${GITHUB_REPO}/tree/main/plugins/${entry.name}`,
+        repository: `https://github.com/${GITHUB_REPO}`,
+        license: 'MIT',
+        created_at: fs.statSync(pluginPath).birthtime.toISOString(),
+        updated_at: fs.statSync(manifestPath).mtime.toISOString(),
+        tools: manifest.tools || [],
+        capabilities: manifest.capabilities || {},
+        lifecycle: manifest.lifecycle || {},
+        readme: readme.substring(0, 500), // 只保留前 500 字符
+        file_size: totalSize,
+        download_url: `https://github.com/${GITHUB_REPO}/raw/main/plugins/${entry.name}.zip`,
+      });
+    } catch (error) {
+      console.error(`Error parsing ${manifestPath}:`, error.message);
     }
   }
 
