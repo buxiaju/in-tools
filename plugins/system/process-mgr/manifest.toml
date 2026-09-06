@@ -1,4 +1,4 @@
-[plugin]
+﻿[plugin]
 id = "com.intools.process-mgr"
 name = "进程管理"
 version = "1.0.0"
@@ -52,6 +52,6 @@ permissions = ["process:spawn", "shell:exec"]
 usage_file = "README.md"
 
 [lifecycle]
-mode = "on-demand"
+mode = "startup"
 idle_timeout_sec = 300
 restart_policy = "on-failure"

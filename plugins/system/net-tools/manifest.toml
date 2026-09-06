@@ -1,4 +1,4 @@
-[plugin]
+﻿[plugin]
 id = "com.intools.net-tools"
 name = "网络工具"
 version = "1.0.0"
@@ -53,6 +53,28 @@ type = "string"
 description = "请求 URL"
 
 [[tools]]
+name = "net:request"
+description = "发送完整的 HTTP 请求（支持 GET/POST/PUT/DELETE 等方法）"
+[tools.input_schema]
+type = "object"
+required = ["url"]
+[tools.input_schema.properties.url]
+type = "string"
+description = "请求 URL"
+[tools.input_schema.properties.method]
+type = "string"
+description = "HTTP 方法，默认 GET"
+[tools.input_schema.properties.headers]
+type = "object"
+description = "请求头"
+[tools.input_schema.properties.body]
+type = "string"
+description = "请求体（POST/PUT 时使用）"
+[tools.input_schema.properties.timeout]
+type = "integer"
+description = "超时秒数，默认 15"
+
+[[tools]]
 name = "net:ip"
 description = "获取本机 IP 地址信息"
 [tools.input_schema]
@@ -65,6 +87,6 @@ permissions = ["network:http", "network:dns", "network:socket"]
 usage_file = "README.md"
 
 [lifecycle]
-mode = "on-demand"
+mode = "startup"
 idle_timeout_sec = 300
 restart_policy = "on-failure"

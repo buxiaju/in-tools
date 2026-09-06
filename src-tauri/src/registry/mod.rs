@@ -13,6 +13,9 @@ use std::path::{Path, PathBuf};
 
 pub mod discovery;
 pub mod import;
+pub mod plugin_marketplace;
+pub mod plugin_signing;
+pub mod plugin_versioning;
 pub mod seed;
 
 /// 插件分类：系统自带 / 测试用 / 用户安装。
@@ -116,9 +119,13 @@ impl Registry {
     ///
     /// 加载顺序：system → test → user。同 id 冲突时先到先得（system 优先级最高）。
     /// 不存在的子目录静默跳过。
+    ///
+    /// **向后兼容**：根目录下直接存在的插件（旧版布局）也会被扫描，
+    /// 归入 `user` 分类，但优先级低于子目录中的同 id 插件。
     pub fn scan_and_build_categorized(root: &Path) -> Result<Self, LoadError> {
         let mut reg = Self::new();
 
+        // 先扫描分类子目录（优先级高）
         let categories = [
             (PluginCategory::System, root.join("system")),
             (PluginCategory::Test, root.join("test")),
@@ -134,6 +141,18 @@ impl Registry {
                 match entry {
                     Ok(loaded) => reg.insert_loaded(loaded, *category),
                     Err(e) => reg.load_failures.push(e),
+                }
+            }
+        }
+
+        // 向后兼容：扫描根目录下的旧插件（排除子目录本身），归入 user 分类。
+        // 已在子目录中注册的同 id 插件不会被覆盖（insert_loaded 做了去重）。
+        if root.is_dir() {
+            let entries = discovery::scan_plugins_root(root)?;
+            for entry in entries {
+                match entry {
+                    Ok(loaded) => reg.insert_loaded(loaded, PluginCategory::User),
+                    Err(_) => {} // 根目录的失败条目已在子目录扫描中记录，不重复
                 }
             }
         }

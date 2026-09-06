@@ -19,11 +19,13 @@ use crate::config::{self, JsonIoError};
 use crate::permission::{
     CallerIdentity, GrantRecord, PermissionChecker, PermissionError, PermissionPrompter,
 };
-use crate::protocol::manifest::{LifecycleMode, Manifest, RestartPolicy, ToolDescriptor};
+use crate::protocol::manifest::{LifecycleMode, Manifest, ResourceLimits, RestartPolicy, ToolDescriptor};
 use crate::protocol::message::JsonRpcError;
 use crate::registry::Registry;
+use crate::runtime::audit_enhanced::{EnhancedAuditSystem, SecurityEvent, SecurityEventType};
 use crate::runtime::instance::{HostHandler, InstanceError, InstanceState, PluginInstance};
 use crate::runtime::process::{spawn_plugin, ProcessConfig, ProcessError};
+use crate::runtime::resource_monitor::ResourceMonitor;
 use crate::runtime::transport::Transport;
 
 /// 调用链最大深度。超过即拒绝，防止插件间循环调用打爆栈。
@@ -298,6 +300,10 @@ pub struct Supervisor<P: PermissionPrompter> {
     logs_dir: Option<PathBuf>,
     plugin_configs_dir: Option<PathBuf>,
     self_ref: OnceLock<Weak<dyn HostHandler>>,
+    /// 资源监控器。
+    resource_monitor: Arc<ResourceMonitor>,
+    /// 增强审计系统。
+    enhanced_audit: Arc<EnhancedAuditSystem>,
 }
 
 impl<P: PermissionPrompter> Supervisor<P> {
@@ -306,6 +312,12 @@ impl<P: PermissionPrompter> Supervisor<P> {
         checker: PermissionChecker<P>,
         factory: Arc<dyn TransportFactory>,
     ) -> Self {
+        // 初始化资源监控器，监控间隔为 5 秒
+        let resource_monitor = Arc::new(ResourceMonitor::new(Duration::from_secs(5)));
+
+        // 初始化增强审计系统
+        let enhanced_audit = Arc::new(EnhancedAuditSystem::new());
+
         Self {
             registry: RwLock::new(registry),
             disabled: RwLock::new(BTreeSet::new()),
@@ -319,6 +331,8 @@ impl<P: PermissionPrompter> Supervisor<P> {
             logs_dir: None,
             plugin_configs_dir: None,
             self_ref: OnceLock::new(),
+            resource_monitor,
+            enhanced_audit,
         }
     }
 
@@ -378,6 +392,27 @@ impl<P: PermissionPrompter> Supervisor<P> {
     pub fn with_disabled_plugins(mut self, ids: impl IntoIterator<Item = String>) -> Self {
         self.disabled = RwLock::new(ids.into_iter().collect());
         self
+    }
+
+    /// 设置插件的资源限制。
+    pub fn set_resource_limits(&self, plugin_id: &str, limits: ResourceLimits) {
+        // 这里需要将 limits 传递给 resource_monitor
+        // 由于 resource_monitor 是 Arc，我们需要通过方法调用
+        // 暂时先记录日志，后续实现实际的资源监控
+        tracing::info!(
+            plugin_id = plugin_id,
+            max_memory_mb = limits.max_memory_mb,
+            max_cpu_percent = limits.max_cpu_percent,
+            max_disk_mb = limits.max_disk_mb,
+            max_network_kbps = limits.max_network_kbps,
+            "设置插件资源限制"
+        );
+    }
+
+    /// 启动资源监控。
+    pub fn start_resource_monitoring(self: &Arc<Self>) {
+        let monitor = Arc::clone(&self.resource_monitor);
+        monitor.start_monitoring();
     }
 
     /// 借出注册表的读守卫。
@@ -626,6 +661,23 @@ impl<P: PermissionPrompter> Supervisor<P> {
                 plugin_id: plugin_id.to_string(),
             });
         }
+
+        // 检查资源限制违规
+        let violations = self.resource_monitor.check_violations(plugin_id).await;
+        if !violations.is_empty() {
+            let violation_messages: Vec<String> = violations.iter().map(|v| v.to_string()).collect();
+            tracing::warn!(
+                plugin_id = plugin_id,
+                violations = %violation_messages.join(", "),
+                "插件资源使用超限"
+            );
+            // 这里可以选择：
+            // 1. 只记录警告，允许继续运行
+            // 2. 拒绝启动/调用
+            // 3. 根据配置决定行为
+            // 目前选择只记录警告
+        }
+
         {
             let guard = self.instances.lock().await;
             if let Some(managed) = guard.get(plugin_id) {
@@ -874,10 +926,23 @@ impl<P: PermissionPrompter> Supervisor<P> {
                     .ok_or_else(|| InvokeError::ToolNotFound {
                         tool: tool_name.to_string(),
                     })?;
-            (
-                plugin.id().to_string(),
-                plugin.manifest.capabilities.permissions.clone(),
-            )
+
+            // 优先使用工具级权限，如果没有则回退到插件级权限
+            let tool_permissions = plugin
+                .manifest
+                .tools
+                .iter()
+                .find(|t| t.name == tool_name)
+                .map(|t| t.permissions.clone())
+                .unwrap_or_default();
+
+            let permissions = if tool_permissions.is_empty() {
+                plugin.manifest.capabilities.permissions.clone()
+            } else {
+                tool_permissions
+            };
+
+            (plugin.id().to_string(), permissions)
         };
 
         // 第二步：权限校验（按调用方身份）。
@@ -890,18 +955,63 @@ impl<P: PermissionPrompter> Supervisor<P> {
             .check_all(&plugin_id, &declared, caller, Some(tool_name), Some(&args_summary))
             .await?;
 
-        // 第三步：调用深度检查。超过上限说明插件间出现了过深或循环的调用。
+        // 第三步：网络访问检查（如果工具声明了网络权限）。
+        // 检查工具是否需要网络访问，如果需要则验证网络策略。
+        let has_network_permission = declared.iter().any(|p| {
+            p.category == "network"
+                && matches!(
+                    p.action.as_str(),
+                    "http" | "websocket" | "dns" | "socket" | "send" | "receive"
+                )
+        });
+        if has_network_permission {
+            // 从参数中提取 URL 进行检查
+            if let Some(url) = args.get("url").and_then(|v| v.as_str()) {
+                self.checker
+                    .lock()
+                    .await
+                    .check_network_access(url)?;
+            }
+        }
+
+        // 第四步：调用深度检查。超过上限说明插件间出现了过深或循环的调用。
         if caller.depth() >= MAX_CALL_DEPTH {
+            // 记录安全事件
+            let security_event = SecurityEvent::new(
+                SecurityEventType::CallChainTooDeep,
+                plugin_id.clone(),
+                format!("调用链深度 {} 超过上限 {}", caller.depth(), MAX_CALL_DEPTH),
+                7,
+            )
+            .with_tool(tool_name.to_string());
+
+            self.enhanced_audit.record_security_event(security_event).await;
+
             return Err(InvokeError::DepthExceeded {
                 depth: caller.depth(),
                 max: MAX_CALL_DEPTH,
             });
         }
 
-        // 第四步：实例按需唤醒。
+        // 第五步：开始增强审计记录。
+        let call_id = uuid::Uuid::new_v4().to_string();
+        let start_time = Instant::now();
+
+        self.enhanced_audit
+            .start_call(
+                call_id.clone(),
+                None, // 父调用 ID（简化实现）
+                caller.label(),
+                tool_name.to_string(),
+                plugin_id.clone(),
+                args_summary.clone(),
+            )
+            .await;
+
+        // 第六步：实例按需唤醒。
         let instance = self.ensure_running(&plugin_id).await?;
 
-        // 第五步：RPC 转发（超时由 instance 依 lifecycle 配置处理）。
+        // 第七步：RPC 转发（超时由 instance 依 lifecycle 配置处理）。
         //
         // 把调用方深度一并交给实例：若被调插件又回调 host/callTool，
         // 实例会以这个深度为基准继续累加，depth 才不会在链路上被重置为 0。
@@ -911,6 +1021,45 @@ impl<P: PermissionPrompter> Supervisor<P> {
                 json!({ "name": tool_name, "arguments": args }),
                 caller.depth(),
             )
+            .await;
+
+        // 第八步：完成增强审计记录。
+        let duration = start_time.elapsed();
+        let duration_ms = duration.as_millis() as u64;
+        let success = result.is_ok();
+        let outcome = match &result {
+            Ok(_) => "success".to_string(),
+            Err(e) => format!("error: {}", e),
+        };
+
+        self.enhanced_audit
+            .complete_call(&call_id, outcome, duration_ms, success)
+            .await;
+
+        Ok(result?)
+    }
+
+    /// 调用插件方法（用于 UI 回调等场景）。
+    ///
+    /// 与 `call_tool` 不同，这个方法直接向插件发送 JSON-RPC 请求，
+    /// 不经过权限校验（因为是用户在前端 UI 中主动触发的操作）。
+    ///
+    /// # 参数
+    /// - `plugin_id`: 目标插件 ID
+    /// - `method`: 方法名
+    /// - `args`: 方法参数
+    pub async fn call_plugin_method(
+        &self,
+        plugin_id: &str,
+        method: &str,
+        args: JsonValue,
+    ) -> Result<JsonValue, InvokeError> {
+        // 确保插件在运行
+        let instance = self.ensure_running(plugin_id).await?;
+
+        // 调用插件方法
+        let result = instance
+            .call_at_depth(method, args, 0)
             .await?;
 
         Ok(result)
@@ -1003,6 +1152,46 @@ impl<P: PermissionPrompter + 'static> HostHandler for Supervisor<P> {
             method: method.to_string(),
             params,
         });
+    }
+
+    /// 插件请求宿主弹出特定 UI（第三期扩展）。
+    ///
+    /// 这是一个占位实现，实际 UI 弹出逻辑需要在前端实现。
+    /// 当前版本返回一个占位响应，后续需要：
+    /// 1. 通过 Tauri 事件系统通知前端
+    /// 2. 前端根据 `ui_type` 和 `schema` 渲染对应的 UI
+    /// 3. 用户操作完成后通过 `callback_method` 回调插件
+    async fn host_ui_request(
+        &self,
+        caller_plugin: &str,
+        ui_type: &str,
+        schema: JsonValue,
+        callback_method: &str,
+    ) -> Result<JsonValue, JsonRpcError> {
+        // 记录日志，方便调试
+        tracing::info!(
+            plugin = caller_plugin,
+            ui_type = ui_type,
+            callback = callback_method,
+            "插件请求 UI"
+        );
+
+        // 通过通知系统发送到前端
+        self.notifier.emit(PluginNotification {
+            plugin_id: caller_plugin.to_string(),
+            method: "ui/request".to_string(),
+            params: json!({
+                "ui_type": ui_type,
+                "schema": schema,
+                "callback_method": callback_method,
+            }),
+        });
+
+        // 返回占位响应，表示请求已接收
+        Ok(json!({
+            "status": "requested",
+            "message": "UI 请求已接收，等待前端处理"
+        }))
     }
 }
 
@@ -1116,6 +1305,7 @@ mod tests {
             name: name.to_string(),
             description: String::new(),
             input_schema: json!({"type":"object","properties":{},"required":[]}),
+            permissions: Vec::new(),
         }
     }
 

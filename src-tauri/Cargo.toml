@@ -42,6 +42,12 @@ uuid = { version = "1.26.0", features = ["v4"] }
 # `compile_error!("You need to choose a zlib backend")` 拒绝编译。
 # `-zlib-rs` 是纯 Rust 实现，不引入 C 工具链依赖。
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+# AI 配置连接测试。只需 HTTP POST，关掉默认 TLS（端点是本机 Ollama 或明文 API）。
+reqwest = { version = "0.13.4", default-features = false, features = ["json"] }
+# 网络访问控制：IP 地址范围解析。
+ipnetwork = "0.20.0"
+# URL 解析：网络策略验证。
+url = "2.5.0"
 
 # 全局快捷键：注册系统级热键，让用户在任意应用中按快捷键直接调用插件工具。
 # 仅桌面端需要，用 target 限定避免拖累移动构建（虽然当前项目不支持移动端，

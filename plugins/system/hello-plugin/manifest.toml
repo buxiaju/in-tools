@@ -1,4 +1,4 @@
-[plugin]
+﻿[plugin]
 id = "com.intools.hello"
 name = "Hello 示范插件"
 version = "0.1.0"

@@ -1013,20 +1013,52 @@ input[type="password"].input {
   color: #3fb950;
 }
 
-/* ─── 分类分组标题 ─── */
+/* ─── 分类分组（可折叠） ─── */
+
+.category-section {
+  margin-bottom: 8px;
+}
+.category-section:first-child .category-header {
+  padding-top: 0;
+}
 
 .category-header {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 16px 0 8px;
+  padding: 14px 0 10px;
   border-bottom: 1px solid var(--border);
-  margin-bottom: 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition);
 }
-.category-header:first-child {
-  padding-top: 0;
+.category-header:hover {
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
 }
+
+.category-arrow {
+  font-size: 11px;
+  color: var(--fg-dim);
+  transition: transform 200ms ease;
+  width: 14px;
+  text-align: center;
+}
+.category-section.collapsed .category-arrow {
+  transform: rotate(-90deg);
+}
+
 .category-count {
   font-size: 12px;
   color: var(--fg-dim);
+}
+
+.category-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+}
+.category-section.collapsed .category-body {
+  display: none;
 }

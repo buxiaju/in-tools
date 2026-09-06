@@ -101,6 +101,7 @@ fn main() {
             commands::set_mcp_enabled,
             commands::get_ai_config,
             commands::set_ai_config,
+            commands::test_ai_connection,
             commands::get_plugin_settings,
             commands::save_plugin_settings,
             commands::get_plugin_shortcut,
@@ -113,6 +114,10 @@ fn main() {
             commands::get_clipboard_history,
             commands::copy_clipboard_entry,
             commands::close_overlay,
+            commands::call_plugin_callback,
+            commands::get_marketplace_config,
+            commands::set_marketplace_config,
+            commands::fetch_marketplace_plugins,
         ])
         .setup(move |app| {
             // `AppHandle` 只在这里才存在，而 `PermissionChecker` 在它之前就得造好，

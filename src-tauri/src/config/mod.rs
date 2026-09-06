@@ -324,6 +324,10 @@ pub struct HostConfig {
     /// 主窗口关闭按钮的行为。默认 `minimize_to_tray`，与「宿主是常驻后台工具」
     /// 的产品定位一致。
     pub close_behavior: CloseBehavior,
+    /// 插件市场总开关。默认关。
+    pub marketplace_enabled: bool,
+    /// 插件市场 URL。默认使用 GitHub Pages。
+    pub marketplace_url: String,
 }
 
 impl HostConfig {

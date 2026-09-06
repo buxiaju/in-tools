@@ -1634,6 +1634,7 @@ dependencies = [
  "axum",
  "chrono",
  "dirs",
+ "ipnetwork",
  "reqwest",
  "serde",
  "serde_json",
@@ -1646,6 +1647,7 @@ dependencies = [
  "toml 1.1.4+spec-1.1.0",
  "tracing",
  "tracing-subscriber",
+ "url",
  "uuid",
  "windows-sys 0.61.2",
  "zip",
@@ -1656,6 +1658,15 @@ name = "ipnet"
 version = "2.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a756c3fac73139e83f14c2d742155dd2b78d3ee56597b419a0579b7bdd6dd78"
+
+[[package]]
+name = "ipnetwork"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf466541e9d546596ee94f9f69590f89473455f88372423e0008fc1a7daf100e"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "itoa"

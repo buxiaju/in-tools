@@ -6,10 +6,8 @@ author = "InTools"
 description = "计算文件 MD5/SHA1/SHA256 哈希值，用于文件校验与完整性检查（Go 编译型插件）"
 
 [exec]
-# 编译后的二进制即插即用，无需解释器。
-# 编译命令：go build -o file-hash.exe main.go
-command = "file-hash.exe"
-args = []
+command = "python"
+args = ["-u", "main.py"]
 
 [[tools]]
 name = "hash:file"

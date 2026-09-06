@@ -1,0 +1,57 @@
+[plugin]
+id = "com.intools.web-scraper"
+name = "网页抓取"
+version = "1.0.0"
+author = "InTools"
+description = "抓取网页内容、提取文本、解析 HTML"
+
+[exec]
+command = "python"
+args = ["-u", "main.py"]
+
+[[tools]]
+name = "web:fetch"
+description = "获取网页内容"
+[tools.input_schema]
+type = "object"
+required = ["url"]
+[tools.input_schema.properties.url]
+type = "string"
+description = "网页 URL"
+[tools.input_schema.properties.encoding]
+type = "string"
+description = "字符编码，默认自动检测"
+
+[[tools]]
+name = "web:extract-text"
+description = "从 HTML 中提取纯文本"
+[tools.input_schema]
+type = "object"
+required = ["html"]
+[tools.input_schema.properties.html]
+type = "string"
+description = "HTML 内容"
+
+[[tools]]
+name = "web:extract-links"
+description = "从 HTML 中提取所有链接"
+[tools.input_schema]
+type = "object"
+required = ["html"]
+[tools.input_schema.properties.html]
+type = "string"
+description = "HTML 内容"
+[tools.input_schema.properties.base_url]
+type = "string"
+description = "基础 URL（用于解析相对链接）"
+
+[capabilities]
+permissions = ["network:http"]
+
+[docs]
+usage_file = "README.md"
+
+[lifecycle]
+mode = "on-demand"
+idle_timeout_sec = 300
+restart_policy = "on-failure"

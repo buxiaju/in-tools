@@ -18,6 +18,7 @@ use std::sync::Arc;
 use intools::config::McpExposure;
 use intools::mcp::bridge::McpToolTable;
 use intools::mcp::server::{self, McpServerHandle, McpState, ToolTableSource};
+use intools::registry::PluginCategory;
 use intools::permission::{FixedPrompter, PermissionChecker, PermissionStore, PromptDecision};
 use intools::protocol::manifest::load_from_str;
 use intools::registry::discovery::LoadedPlugin;
@@ -155,7 +156,7 @@ fn synthetic_registry(specs: &[(&str, &str, &[&str])]) -> Registry {
         reg.insert_loaded(LoadedPlugin {
             plugin_dir: PathBuf::from("."),
             manifest,
-        });
+        }, PluginCategory::User);
     }
     reg
 }

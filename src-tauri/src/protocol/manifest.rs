@@ -234,6 +234,12 @@ pub struct ToolDescriptor {
     /// 只校验它**能被解析为对象**（因为 LLM SDK 和 MCP 都需要对象）。
     #[serde(default = "default_schema")]
     pub input_schema: JsonValue,
+    /// 工具级权限声明（可选）。
+    ///
+    /// 如果声明了，工具调用时会检查这些权限，而不是使用插件级权限。
+    /// 这允许更细粒度的权限控制。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub permissions: Vec<Permission>,
 }
 
 fn default_schema() -> JsonValue {
@@ -256,6 +262,9 @@ pub struct Lifecycle {
     pub restart_policy: RestartPolicy,
     /// 单次请求超时（秒）。默认 30。
     pub request_timeout_sec: Option<u32>,
+    /// 资源限制配置。
+    #[serde(default, skip_serializing_if = "ResourceLimits::is_default")]
+    pub resource_limits: ResourceLimits,
 }
 
 impl Default for Lifecycle {
@@ -265,7 +274,50 @@ impl Default for Lifecycle {
             idle_timeout_sec: Some(300),
             restart_policy: RestartPolicy::OnFailure,
             request_timeout_sec: Some(30),
+            resource_limits: ResourceLimits::default(),
         }
+    }
+}
+
+/// 资源限制配置。
+///
+/// 用于限制插件进程的资源使用，防止恶意或失控的插件消耗过多系统资源。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ResourceLimits {
+    /// 最大内存使用量（MB）。0 表示不限制。
+    pub max_memory_mb: u32,
+    /// 最大 CPU 使用率（百分比，0-100）。0 表示不限制。
+    pub max_cpu_percent: u32,
+    /// 最大磁盘使用量（MB）。0 表示不限制。
+    pub max_disk_mb: u32,
+    /// 最大网络带宽（KB/s）。0 表示不限制。
+    pub max_network_kbps: u32,
+}
+
+impl Default for ResourceLimits {
+    fn default() -> Self {
+        Self {
+            max_memory_mb: 0,
+            max_cpu_percent: 0,
+            max_disk_mb: 0,
+            max_network_kbps: 0,
+        }
+    }
+}
+
+impl ResourceLimits {
+    /// 检查是否为默认配置（所有限制都为 0）。
+    pub fn is_default(&self) -> bool {
+        self.max_memory_mb == 0
+            && self.max_cpu_percent == 0
+            && self.max_disk_mb == 0
+            && self.max_network_kbps == 0
+    }
+
+    /// 检查是否有任何资源限制。
+    pub fn has_limits(&self) -> bool {
+        !self.is_default()
     }
 }
 

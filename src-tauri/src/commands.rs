@@ -1327,6 +1327,73 @@ pub async fn set_ai_config(
     })
 }
 
+/// 测试 AI API 连接：发送一个最小请求验证 base_url + api_key 是否可用。
+#[tauri::command]
+pub async fn test_ai_connection(
+    base_url: String,
+    api_key: String,
+    model: String,
+) -> CmdResult<serde_json::Value> {
+    let base_url = base_url.trim_end_matches('/');
+    let chat_url = format!("{}/chat/completions", base_url);
+
+    let body = json!({
+        "model": if model.is_empty() { "deepseek-chat" } else { &model },
+        "messages": [{"role": "user", "content": "hi"}],
+        "max_tokens": 1,
+    });
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(&chat_url)
+        .header("Content-Type", "application/json")
+        .header(
+            "Authorization",
+            format!("Bearer {}", if api_key.is_empty() { "none" } else { &api_key }),
+        )
+        .json(&body)
+        .timeout(std::time::Duration::from_secs(15))
+        .send()
+        .await
+        .map_err(|e| format!("连接失败：{}", e))?;
+
+    let status = resp.status();
+    let text = resp.text().await.unwrap_or_default();
+
+    if status.is_success() {
+        // 解析模型名用于展示
+        let parsed: Option<serde_json::Value> = serde_json::from_str(&text).ok();
+        let model_used = parsed
+            .as_ref()
+            .and_then(|v| v.get("model"))
+            .and_then(|m| m.as_str())
+            .unwrap_or(&model);
+        Ok(json!({
+            "ok": true,
+            "message": "连接成功",
+            "model": model_used,
+            "status": status.as_u16(),
+        }))
+    } else {
+        // 尝试解析错误信息
+        let error_msg = parsed_error(&text, status.as_u16());
+        Ok(json!({
+            "ok": false,
+            "message": error_msg,
+            "status": status.as_u16(),
+        }))
+    }
+}
+
+fn parsed_error(text: &str, status: u16) -> String {
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(text) {
+        if let Some(msg) = v.get("error").and_then(|e| e.get("message")).and_then(|m| m.as_str()) {
+            return format!("HTTP {} — {}", status, msg);
+        }
+    }
+    format!("HTTP {}", status)
+}
+
 // ─────────────────── 屏幕取色 ───────────────────
 
 /// 取色器面板用的像素颜色 DTO。
@@ -1393,6 +1460,104 @@ pub fn close_overlay(app: tauri::AppHandle) -> CmdResult<()> {
         w.close().map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+/// 调用插件回调（第三期 UI 扩展）。
+///
+/// 当用户在前端 UI 中完成操作后，通过此命令回调插件。
+/// 例如：截图框选完成后，将选区坐标发送给 screenshot 插件。
+///
+/// # 参数
+/// - `plugin_id`: 目标插件 ID
+/// - `method`: 回调方法名（插件在 `host/uiRequest` 中指定的 `callback_method`）
+/// - `args`: 回调参数（如选区坐标、表单数据等）
+#[tauri::command]
+pub async fn call_plugin_callback(
+    plugin_id: String,
+    method: String,
+    args: serde_json::Value,
+    state: State<'_, AppState>,
+) -> CmdResult<()> {
+    // 构造一个 JSON-RPC 请求发送给目标插件
+    let request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": method,
+        "params": args,
+    });
+
+    // 通过 Supervisor 调用插件
+    state
+        .supervisor
+        .call_plugin_method(&plugin_id, &method, args)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+/// 获取插件市场配置。
+#[tauri::command]
+pub async fn get_marketplace_config() -> CmdResult<MarketplaceConfigView> {
+    let config = HostConfig::load().map_err(|e| e.to_string())?;
+    Ok(MarketplaceConfigView {
+        enabled: config.marketplace_enabled,
+        url: config.marketplace_url,
+    })
+}
+
+/// 设置插件市场配置。
+#[tauri::command]
+pub async fn set_marketplace_config(
+    enabled: bool,
+    url: String,
+) -> CmdResult<()> {
+    let mut config = HostConfig::load().map_err(|e| e.to_string())?;
+    config.marketplace_enabled = enabled;
+    config.marketplace_url = url;
+    config.save().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// 从插件市场获取插件列表。
+#[tauri::command]
+pub async fn fetch_marketplace_plugins(
+    marketplace_url: String,
+) -> CmdResult<Vec<MarketplacePluginView>> {
+    // 这里简化处理，实际实现需要：
+    // 1. 从 marketplace_url 获取 JSON 数据
+    // 2. 解析插件列表
+    // 3. 返回格式化的插件信息
+    // 目前返回空列表作为占位实现
+    let _ = marketplace_url;
+    Ok(Vec::new())
+}
+
+/// 插件市场配置视图。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarketplaceConfigView {
+    pub enabled: bool,
+    pub url: String,
+}
+
+/// 插件市场插件视图。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarketplacePluginView {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub author: String,
+    pub category: String,
+    pub tags: Vec<String>,
+    pub homepage: Option<String>,
+    pub license: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub file_size: u64,
+    pub download_count: u64,
+    pub rating: f32,
+    pub rating_count: u32,
 }
 
 #[cfg(test)]

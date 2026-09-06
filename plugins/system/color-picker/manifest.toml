@@ -1,4 +1,4 @@
-[plugin]
+﻿[plugin]
 id = "com.intools.colorpicker"
 name = "屏幕取色器"
 version = "0.1.0"
@@ -45,6 +45,6 @@ ui = "color-picker"
 usage_file = "README.md"
 
 [lifecycle]
-mode = "on-demand"
+mode = "startup"
 idle_timeout_sec = 120
 restart_policy = "on-failure"

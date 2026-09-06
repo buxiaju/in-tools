@@ -1,4 +1,4 @@
-[plugin]
+﻿[plugin]
 id = "com.intools.ocr"
 name = "屏幕文字识别"
 version = "0.1.0"
@@ -52,6 +52,6 @@ type = "boolean"
 default = true
 
 [lifecycle]
-mode = "on-demand"
+mode = "startup"
 idle_timeout_sec = 180
 restart_policy = "on-failure"

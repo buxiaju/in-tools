@@ -1,4 +1,4 @@
-[plugin]
+﻿[plugin]
 id = "com.intools.screenshot"
 name = "屏幕截图"
 version = "0.1.0"
@@ -25,7 +25,7 @@ description = "截图区域 {x, y, width, height}，不传则截取全屏"
 permissions = ["screen:capture"]
 
 [lifecycle]
-mode = "on-demand"
+mode = "startup"
 idle_timeout_sec = 300
 restart_policy = "on-failure"
 

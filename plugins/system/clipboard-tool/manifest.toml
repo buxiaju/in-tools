@@ -1,4 +1,4 @@
-[plugin]
+﻿[plugin]
 id = "com.intools.clipboard"
 name = "剪贴板工具"
 version = "0.1.0"
@@ -62,6 +62,6 @@ tool = "clipboard:read_text"
 ui = "clipboard-history"
 
 [lifecycle]
-mode = "on-demand"
+mode = "startup"
 idle_timeout_sec = 120
 restart_policy = "on-failure"

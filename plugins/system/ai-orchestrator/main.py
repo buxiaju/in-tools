@@ -34,7 +34,31 @@ AI_CHAT_TOOL = {
     },
 }
 
-TOOLS = [AI_CHAT_TOOL]
+AI_CHAT_WITH_HISTORY_TOOL = {
+    "name": "ai:chat-with-history",
+    "description": "向 AI 发送消息，支持多轮对话历史",
+    "input_schema": {
+        "type": "object",
+        "required": ["message"],
+        "properties": {
+            "message": {"type": "string", "description": "用户的自然语言消息"},
+            "history": {
+                "type": "array",
+                "description": "对话历史（可选）",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "role": {"type": "string", "enum": ["user", "assistant", "tool"]},
+                        "content": {"type": "string"},
+                    },
+                },
+            },
+            "system_prompt": {"type": "string", "description": "自定义系统提示词（可选）"},
+        },
+    },
+}
+
+TOOLS = [AI_CHAT_TOOL, AI_CHAT_WITH_HISTORY_TOOL]
 
 CODE_METHOD_NOT_FOUND = -32601
 CODE_INVALID_PARAMS = -32602
@@ -189,7 +213,7 @@ def function_name_to_tool(func_name, tools):
 # ─────────────────── 核心对话循环 ───────────────────
 
 
-def run_chat(user_message, config, tools):
+def run_chat(user_message, config, tools, history=None, system_prompt=None):
     """执行一次 AI 对话，含多轮工具调用。返回 (response_text, error)。"""
     base_url = config.get("base_url", "").rstrip("/")
     api_key = config.get("api_key", "")
@@ -203,17 +227,30 @@ def run_chat(user_message, config, tools):
     functions = tools_to_functions(tools)
     chat_url = "{}/chat/completions".format(base_url)
 
-    messages = [
-        {
+    # 构建消息列表
+    messages = []
+
+    # 添加系统提示词
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    else:
+        messages.append({
             "role": "system",
             "content": (
                 "你是一个智能助手，可以通过调用工具来帮助用户完成任务。"
                 "请根据用户的需求选择合适的工具。如果不需要工具，直接回答即可。"
                 "工具调用结果会用中文返回，请基于结果给出自然、简洁的回答。"
             ),
-        },
-        {"role": "user", "content": user_message},
-    ]
+        })
+
+    # 添加对话历史
+    if history:
+        for msg in history:
+            if isinstance(msg, dict) and "role" in msg and "content" in msg:
+                messages.append(msg)
+
+    # 添加当前用户消息
+    messages.append({"role": "user", "content": user_message})
 
     for round_num in range(MAX_TOOL_ROUNDS):
         body = {
@@ -307,7 +344,7 @@ def call_tool(params):
     name = params.get("name")
     arguments = params.get("arguments") or {}
 
-    if name != "ai:chat":
+    if name not in ("ai:chat", "ai:chat-with-history"):
         return None, (CODE_METHOD_NOT_FOUND, "未知工具：{}".format(name))
 
     message = arguments.get("message")
@@ -329,8 +366,12 @@ def call_tool(params):
 
     tools = tools_resp.get("tools", []) if tools_resp else []
 
+    # 获取历史和系统提示词（仅对 ai:chat-with-history 有效）
+    history = arguments.get("history") if name == "ai:chat-with-history" else None
+    system_prompt = arguments.get("system_prompt") if name == "ai:chat-with-history" else None
+
     # 运行对话循环
-    response, error = run_chat(message, config, tools)
+    response, error = run_chat(message, config, tools, history, system_prompt)
     if error is not None:
         return None, (CODE_INTERNAL_ERROR, error)
 

@@ -1,4 +1,4 @@
-[plugin]
+﻿[plugin]
 id = "com.intools.filesearch"
 name = "文件搜索"
 version = "0.1.0"
@@ -34,6 +34,6 @@ permissions = ["file:read"]
 usage_file = "README.md"
 
 [lifecycle]
-mode = "on-demand"
+mode = "startup"
 idle_timeout_sec = 300
 restart_policy = "on-failure"

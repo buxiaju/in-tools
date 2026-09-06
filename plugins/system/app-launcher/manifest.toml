@@ -1,4 +1,4 @@
-[plugin]
+﻿[plugin]
 id = "com.intools.app-launcher"
 name = "应用启动器"
 version = "1.0.0"
@@ -46,6 +46,6 @@ permissions = ["file:read", "app:spawn"]
 usage_file = "README.md"
 
 [lifecycle]
-mode = "on-demand"
+mode = "startup"
 idle_timeout_sec = 300
 restart_policy = "on-failure"

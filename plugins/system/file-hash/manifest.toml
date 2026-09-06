@@ -1,4 +1,4 @@
-[plugin]
+﻿[plugin]
 id = "com.intools.file-hash"
 name = "文件哈希"
 version = "1.0.0"

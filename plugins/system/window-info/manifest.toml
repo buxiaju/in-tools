@@ -1,4 +1,4 @@
-[plugin]
+﻿[plugin]
 id = "com.intools.windowinfo"
 name = "窗口信息"
 version = "0.1.0"
@@ -55,6 +55,6 @@ tool = "window:active"
 usage_file = "README.md"
 
 [lifecycle]
-mode = "on-demand"
+mode = "startup"
 idle_timeout_sec = 120
 restart_policy = "on-failure"

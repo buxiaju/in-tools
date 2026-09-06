@@ -55,12 +55,13 @@ pub const METHOD_READY: &str = "plugin/ready";
 /// 反向 RPC 的方法名前缀。插件发来的请求只有以此开头才会被受理。
 pub const HOST_METHOD_PREFIX: &str = "host/";
 
-/// 反向 RPC 方法名（设计文档 §5.3 的五项）。
+/// 反向 RPC 方法名（设计文档 §5.3 的五项 + 第三期扩展）。
 pub const HOST_LIST_TOOLS: &str = "host/listTools";
 pub const HOST_CALL_TOOL: &str = "host/callTool";
 pub const HOST_GET_CONFIG: &str = "host/getConfig";
 pub const HOST_SET_CONFIG: &str = "host/setConfig";
 pub const HOST_NOTIFY: &str = "host/notify";
+pub const HOST_UI_REQUEST: &str = "host/uiRequest";
 
 /// 插件推给 UI 的通知前缀（设计文档 §5.4：`notify/progress` 等）。
 pub const NOTIFY_PREFIX: &str = "notify/";
@@ -108,6 +109,19 @@ pub trait HostHandler: Send + Sync {
 
     /// 插件推送给 UI 的通知。Phase 6 先落日志，Phase 7 接 Tauri 事件。
     async fn host_notify(&self, caller_plugin: &str, method: &str, params: JsonValue);
+
+    /// 插件请求宿主弹出特定 UI（第三期扩展）。
+    ///
+    /// `ui_type` 是 UI 类型（如 "overlay", "dialog", "form" 等），
+    /// `schema` 是声明式 UI schema，宿主根据它渲染界面，
+    /// `callback_method` 是用户操作完成后插件希望宿主调用的方法名。
+    async fn host_ui_request(
+        &self,
+        caller_plugin: &str,
+        ui_type: &str,
+        schema: JsonValue,
+        callback_method: &str,
+    ) -> Result<JsonValue, JsonRpcError>;
 }
 
 /// 实例生命周期状态。
@@ -703,6 +717,32 @@ impl PluginInstance {
                 host.host_notify(&self.plugin_id, method, payload).await;
                 Ok(json!({}))
             }
+            HOST_UI_REQUEST => {
+                let ui_type = params
+                    .get("ui_type")
+                    .and_then(JsonValue::as_str)
+                    .ok_or_else(|| {
+                        JsonRpcError::new(
+                            JsonRpcError::CODE_INVALID_PARAMS,
+                            "host/uiRequest 缺少字符串字段 ui_type",
+                        )
+                    })?;
+                let schema = params
+                    .get("schema")
+                    .cloned()
+                    .unwrap_or_else(|| json!({}));
+                let callback_method = params
+                    .get("callback_method")
+                    .and_then(JsonValue::as_str)
+                    .ok_or_else(|| {
+                        JsonRpcError::new(
+                            JsonRpcError::CODE_INVALID_PARAMS,
+                            "host/uiRequest 缺少字符串字段 callback_method",
+                        )
+                    })?;
+                host.host_ui_request(&self.plugin_id, ui_type, schema, callback_method)
+                    .await
+            }
             other => Err(JsonRpcError::new(
                 JsonRpcError::CODE_METHOD_NOT_FOUND,
                 format!("未知的宿主方法：{other}"),
@@ -1216,6 +1256,12 @@ mod tests {
             method: String,
             params: JsonValue,
         },
+        UiRequest {
+            caller: String,
+            ui_type: String,
+            schema: JsonValue,
+            callback_method: String,
+        },
     }
 
     /// 只记账、不做事的假宿主。`HostHandler` 抽成 trait 就是为了让实例侧
@@ -1305,6 +1351,22 @@ mod tests {
                 method: method.to_string(),
                 params,
             });
+        }
+
+        async fn host_ui_request(
+            &self,
+            caller_plugin: &str,
+            ui_type: &str,
+            schema: JsonValue,
+            callback_method: &str,
+        ) -> Result<JsonValue, JsonRpcError> {
+            self.record(HostCall::UiRequest {
+                caller: caller_plugin.to_string(),
+                ui_type: ui_type.to_string(),
+                schema,
+                callback_method: callback_method.to_string(),
+            });
+            Ok(json!({ "status": "requested" }))
         }
     }
 
@@ -1673,6 +1735,16 @@ mod tests {
         }
 
         async fn host_notify(&self, _caller_plugin: &str, _method: &str, _params: JsonValue) {}
+
+        async fn host_ui_request(
+            &self,
+            _caller_plugin: &str,
+            _ui_type: &str,
+            _schema: JsonValue,
+            _callback_method: &str,
+        ) -> Result<JsonValue, JsonRpcError> {
+            Ok(json!({ "status": "requested" }))
+        }
     }
 
     /// 插件 → 宿主 → 同一个插件的自递归。若 `read_loop` 同步 await 派发，

@@ -342,12 +342,22 @@ function applyPluginFilter() {
   const fragment = document.createDocumentFragment();
   for (const [cat, plugins] of Object.entries(groups)) {
     if (plugins.length === 0) continue;
-    const header = el("div", "category-header");
     const catLabel = CATEGORY_LABELS[cat] || cat;
-    header.append(el("span", `badge cat-${cat}`, catLabel));
-    header.append(el("span", "category-count", `${plugins.length} 个插件`));
-    fragment.append(header);
-    fragment.append(...plugins.map(pluginCard));
+
+    const section = el("div", "category-section");
+    section.dataset.cat = cat;
+
+    const header = el("div", "category-header");
+    header.innerHTML = `<span class="category-arrow">▼</span><span class="badge cat-${cat}">${catLabel}</span><span class="category-count">${plugins.length} 个插件</span>`;
+    header.addEventListener("click", () => {
+      section.classList.toggle("collapsed");
+    });
+
+    const body = el("div", "category-body");
+    body.append(...plugins.map(pluginCard));
+
+    section.append(header, body);
+    fragment.append(section);
   }
   list.replaceChildren(fragment);
 }
@@ -425,6 +435,371 @@ function appendTyping() {
 
 function stringify(value) {
   return typeof value === "string" ? value : JSON.stringify(value, null, 2);
+}
+
+/**
+ * 处理插件 UI 请求（第三期扩展）。
+ *
+ * 根据 ui_type 渲染不同的 UI 组件：
+ * - "overlay": 全屏覆盖层（如截图框选）
+ * - "dialog": 模态对话框
+ * - "form": 表单
+ *
+ * @param {string} pluginId - 发起请求的插件 ID
+ * @param {object} params - UI 请求参数
+ * @param {string} params.ui_type - UI 类型
+ * @param {object} params.schema - 声明式 UI schema
+ * @param {string} params.callback_method - 用户操作完成后回调的方法名
+ */
+function handlePluginUiRequest(pluginId, params) {
+  const { ui_type, schema, callback_method } = params;
+
+  console.log(`[UI Request] 插件 ${pluginId} 请求 UI:`, ui_type, schema);
+
+  // 根据 UI 类型分发处理
+  switch (ui_type) {
+    case "overlay":
+      // 全屏覆盖层（如截图框选）
+      handleOverlayRequest(pluginId, schema, callback_method);
+      break;
+    case "dialog":
+      // 模态对话框
+      handleDialogRequest(pluginId, schema, callback_method);
+      break;
+    case "form":
+      // 表单
+      handleFormRequest(pluginId, schema, callback_method);
+      break;
+    default:
+      console.warn(`[UI Request] 未知的 UI 类型: ${ui_type}`);
+      appendMsg("notify", `${pluginId} · UI 请求`, `未知的 UI 类型: ${ui_type}`);
+  }
+}
+
+/**
+ * 处理全屏覆盖层请求（如截图框选）。
+ *
+ * @param {string} pluginId - 插件 ID
+ * @param {object} schema - UI schema
+ * @param {string} callbackMethod - 回调方法名
+ */
+function handleOverlayRequest(pluginId, schema, callbackMethod) {
+  // 创建全屏覆盖层
+  const overlay = document.createElement("div");
+  overlay.id = "plugin-overlay";
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 10000;
+    cursor: crosshair;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  `;
+
+  // 添加提示文本
+  const hint = document.createElement("div");
+  hint.style.cssText = `
+    color: white;
+    font-size: 18px;
+    text-align: center;
+    pointer-events: none;
+  `;
+  hint.textContent = schema.hint || "拖拽选择区域，按 ESC 取消";
+  overlay.appendChild(hint);
+
+  // 添加到 DOM
+  document.body.appendChild(overlay);
+
+  // 框选逻辑
+  let startX, startY, selectionBox;
+  let isSelecting = false;
+
+  overlay.addEventListener("mousedown", (e) => {
+    isSelecting = true;
+    startX = e.clientX;
+    startY = e.clientY;
+
+    // 创建选区框
+    selectionBox = document.createElement("div");
+    selectionBox.style.cssText = `
+      position: fixed;
+      border: 2px dashed #00ff00;
+      background: rgba(0, 255, 0, 0.1);
+      pointer-events: none;
+    `;
+    overlay.appendChild(selectionBox);
+  });
+
+  overlay.addEventListener("mousemove", (e) => {
+    if (!isSelecting || !selectionBox) return;
+
+    const x = Math.min(startX, e.clientX);
+    const y = Math.min(startY, e.clientY);
+    const width = Math.abs(e.clientX - startX);
+    const height = Math.abs(e.clientY - startY);
+
+    selectionBox.style.left = x + "px";
+    selectionBox.style.top = y + "px";
+    selectionBox.style.width = width + "px";
+    selectionBox.style.height = height + "px";
+  });
+
+  overlay.addEventListener("mouseup", (e) => {
+    if (!isSelecting) return;
+    isSelecting = false;
+
+    const x = Math.min(startX, e.clientX);
+    const y = Math.min(startY, e.clientY);
+    const width = Math.abs(e.clientX - startX);
+    const height = Math.abs(e.clientY - startY);
+
+    // 移除覆盖层
+    overlay.remove();
+
+    // 回调插件
+    if (callbackMethod && width > 5 && height > 5) {
+      // 通过 Tauri 命令回调插件
+      invoke("call_plugin_callback", {
+        pluginId: pluginId,
+        method: callbackMethod,
+        args: {
+          x: x,
+          y: y,
+          width: width,
+          height: height,
+        },
+      }).catch(console.error);
+    }
+  });
+
+  // ESC 键取消
+  const handleEsc = (e) => {
+    if (e.key === "Escape") {
+      overlay.remove();
+      document.removeEventListener("keydown", handleEsc);
+    }
+  };
+  document.addEventListener("keydown", handleEsc);
+}
+
+/**
+ * 处理模态对话框请求。
+ *
+ * @param {string} pluginId - 插件 ID
+ * @param {object} schema - UI schema
+ * @param {string} callbackMethod - 回调方法名
+ */
+function handleDialogRequest(pluginId, schema, callbackMethod) {
+  // 创建对话框容器
+  const dialog = document.createElement("div");
+  dialog.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  `;
+
+  // 对话框内容
+  const content = document.createElement("div");
+  content.style.cssText = `
+    background: white;
+    border-radius: 8px;
+    padding: 24px;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  `;
+
+  // 标题
+  if (schema.title) {
+    const title = document.createElement("h3");
+    title.textContent = schema.title;
+    title.style.marginTop = "0";
+    content.appendChild(title);
+  }
+
+  // 内容
+  if (schema.message) {
+    const message = document.createElement("p");
+    message.textContent = schema.message;
+    content.appendChild(message);
+  }
+
+  // 按钮容器
+  const buttons = document.createElement("div");
+  buttons.style.cssText = `
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+  `;
+
+  // 取消按钮
+  const cancelBtn = document.createElement("button");
+  cancelBtn.textContent = "取消";
+  cancelBtn.className = "btn";
+  cancelBtn.onclick = () => dialog.remove();
+  buttons.appendChild(cancelBtn);
+
+  // 确认按钮
+  if (schema.confirmText) {
+    const confirmBtn = document.createElement("button");
+    confirmBtn.textContent = schema.confirmText;
+    confirmBtn.className = "btn primary";
+    confirmBtn.onclick = () => {
+      dialog.remove();
+      if (callbackMethod) {
+        invoke("call_plugin_callback", {
+          pluginId: pluginId,
+          method: callbackMethod,
+          args: { confirmed: true },
+        }).catch(console.error);
+      }
+    };
+    buttons.appendChild(confirmBtn);
+  }
+
+  content.appendChild(buttons);
+  dialog.appendChild(content);
+  document.body.appendChild(dialog);
+}
+
+/**
+ * 处理表单请求。
+ *
+ * @param {string} pluginId - 插件 ID
+ * @param {object} schema - UI schema
+ * @param {string} callbackMethod - 回调方法名
+ */
+function handleFormRequest(pluginId, schema, callbackMethod) {
+  // 创建表单容器
+  const formContainer = document.createElement("div");
+  formContainer.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  `;
+
+  // 表单内容
+  const form = document.createElement("form");
+  form.style.cssText = `
+    background: white;
+    border-radius: 8px;
+    padding: 24px;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  `;
+
+  // 标题
+  if (schema.title) {
+    const title = document.createElement("h3");
+    title.textContent = schema.title;
+    title.style.marginTop = "0";
+    form.appendChild(title);
+  }
+
+  // 表单字段
+  const formData = {};
+  if (schema.fields && Array.isArray(schema.fields)) {
+    schema.fields.forEach((field) => {
+      const fieldContainer = document.createElement("div");
+      fieldContainer.style.marginBottom = "12px";
+
+      // 标签
+      const label = document.createElement("label");
+      label.textContent = field.label || field.name;
+      label.style.display = "block";
+      label.style.marginBottom = "4px";
+      label.style.fontWeight = "bold";
+      fieldContainer.appendChild(label);
+
+      // 输入框
+      const input = document.createElement("input");
+      input.type = field.type || "text";
+      input.name = field.name;
+      input.placeholder = field.placeholder || "";
+      input.style.cssText = `
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-sizing: border-box;
+      `;
+      fieldContainer.appendChild(input);
+
+      form.appendChild(fieldContainer);
+    });
+  }
+
+  // 按钮容器
+  const buttons = document.createElement("div");
+  buttons.style.cssText = `
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+  `;
+
+  // 取消按钮
+  const cancelBtn = document.createElement("button");
+  cancelBtn.type = "button";
+  cancelBtn.textContent = "取消";
+  cancelBtn.className = "btn";
+  cancelBtn.onclick = () => formContainer.remove();
+  buttons.appendChild(cancelBtn);
+
+  // 提交按钮
+  const submitBtn = document.createElement("button");
+  submitBtn.type = "submit";
+  submitBtn.textContent = "提交";
+  submitBtn.className = "btn primary";
+  buttons.appendChild(submitBtn);
+
+  form.appendChild(buttons);
+
+  // 表单提交处理
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    const formData = new FormData(form);
+    const data = {};
+    formData.forEach((value, key) => {
+      data[key] = value;
+    });
+
+    formContainer.remove();
+
+    if (callbackMethod) {
+      invoke("call_plugin_callback", {
+        pluginId: pluginId,
+        method: callbackMethod,
+        args: data,
+      }).catch(console.error);
+    }
+  };
+
+  formContainer.appendChild(form);
+  document.body.appendChild(formContainer);
 }
 
 async function submitChat(event) {
@@ -1379,6 +1754,32 @@ async function submitAiConfig(event) {
   });
 }
 
+async function testAiConnection() {
+  const btn = $("ai-test-btn");
+  const status = $("ai-config-status");
+  await withBusy(btn, async () => {
+    status.textContent = "测试中…";
+    status.className = "field-hint";
+    try {
+      const result = await call("test_ai_connection", {
+        baseUrl: $("ai-base-url").value.trim(),
+        apiKey: $("ai-api-key").value.trim(),
+        model: $("ai-model").value.trim(),
+      });
+      if (result?.ok) {
+        status.textContent = `✓ 连接成功 · 模型：${result.model}`;
+        status.className = "field-hint ok";
+      } else {
+        status.textContent = `✗ ${result?.message || "连接失败"}`;
+        status.className = "field-hint warn";
+      }
+    } catch (e) {
+      status.textContent = `✗ 测试失败：${e}`;
+      status.className = "field-hint warn";
+    }
+  });
+}
+
 // ─────────────────── 权限弹窗 ───────────────────
 
 const DANGER_LABELS = { low: "低危", medium: "中危", high: "高危" };
@@ -1454,6 +1855,9 @@ function subscribe() {
       appendMsg("notify", label, body);
     } else if (method === "notify/streamEnd") {
       // 流结束标记，不需要单独显示一行
+    } else if (method === "ui/request" && params) {
+      // 处理插件 UI 请求
+      handlePluginUiRequest(plugin_id, params);
     } else {
       appendMsg("notify", `${plugin_id} · ${method}`, stringify(params));
     }
@@ -1511,6 +1915,7 @@ function bind() {
   $("chat-form").addEventListener("submit", submitChat);
   $("settings-form").addEventListener("submit", submitSettings);
   $("ai-config-form").addEventListener("submit", submitAiConfig);
+  $("ai-test-btn").addEventListener("click", testAiConnection);
   $("settings-mcp").addEventListener("change", toggleMcp);
   $("settings-client").addEventListener("change", showMcpSnippet);
   $("settings-copy").addEventListener("click", copySnippet);

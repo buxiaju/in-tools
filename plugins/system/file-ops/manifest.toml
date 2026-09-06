@@ -1,4 +1,4 @@
-[plugin]
+﻿[plugin]
 id = "com.intools.file-ops"
 name = "文件操作"
 version = "1.0.0"
@@ -105,6 +105,6 @@ permissions = ["file:read", "file:write"]
 usage_file = "README.md"
 
 [lifecycle]
-mode = "on-demand"
+mode = "startup"
 idle_timeout_sec = 300
 restart_policy = "on-failure"

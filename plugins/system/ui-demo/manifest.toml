@@ -1,4 +1,4 @@
-[plugin]
+﻿[plugin]
 id = "com.intools.uidemo"
 name = "UI Demo"
 version = "0.1.0"

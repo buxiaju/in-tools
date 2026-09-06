@@ -1,4 +1,4 @@
-[plugin]
+﻿[plugin]
 id = "com.intools.system-ctrl"
 name = "系统控制"
 version = "1.0.0"
@@ -47,6 +47,6 @@ permissions = ["clipboard:read", "clipboard:write"]
 usage_file = "README.md"
 
 [lifecycle]
-mode = "on-demand"
+mode = "startup"
 idle_timeout_sec = 300
 restart_policy = "on-failure"

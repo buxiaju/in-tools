@@ -25,6 +25,9 @@ use serde::{Deserialize, Serialize};
 use crate::config::{self, JsonIoError, PathError};
 use crate::protocol::manifest::{DangerLevel, Permission};
 
+pub mod network_policy;
+pub use network_policy::{NetworkPolicy, NetworkViolation};
+
 // ─────────────────── 调用方身份 ───────────────────
 
 /// 调用方身份。UI、AI 编排插件、MCP 客户端三条路径共用同一个调用通道，
@@ -162,6 +165,27 @@ impl PermissionStore {
             .or_else(|| self.persisted.get(plugin_id).and_then(|m| m.get(&key)))
     }
 
+    /// 查工具级授权记录。
+    ///
+    /// 工具级权限的存储键为 `plugin_id:tool_name`，与插件级权限分开存储。
+    pub fn lookup_tool(
+        &self,
+        plugin_id: &str,
+        tool_name: &str,
+        permission: &Permission,
+    ) -> Option<&GrantRecord> {
+        let storage_key = format!("{}:{}", plugin_id, tool_name);
+        let perm_key = permission.to_string();
+        self.session
+            .get(&storage_key)
+            .and_then(|m| m.get(&perm_key))
+            .or_else(|| {
+                self.persisted
+                    .get(&storage_key)
+                    .and_then(|m| m.get(&perm_key))
+            })
+    }
+
     /// 写入一条授权记录。`Always` 立即落盘，`Session` 只进内存。
     pub fn record(
         &mut self,
@@ -187,6 +211,40 @@ impl PermissionStore {
                     .entry(plugin_id.to_string())
                     .or_default()
                     .insert(key, record);
+            }
+        }
+        Ok(())
+    }
+
+    /// 写入一条工具级授权记录。
+    ///
+    /// 工具级权限的存储键为 `plugin_id:tool_name`，与插件级权限分开存储。
+    pub fn record_tool(
+        &mut self,
+        plugin_id: &str,
+        tool_name: &str,
+        permission: &Permission,
+        record: GrantRecord,
+    ) -> Result<(), PermissionError> {
+        let storage_key = format!("{}:{}", plugin_id, tool_name);
+        let perm_key = permission.to_string();
+        match record.scope {
+            GrantScope::Always => {
+                // 同一权限的会话记录已被永久决定取代，清掉以免继续遮蔽。
+                if let Some(m) = self.session.get_mut(&storage_key) {
+                    m.remove(&perm_key);
+                }
+                self.persisted
+                    .entry(storage_key)
+                    .or_default()
+                    .insert(perm_key, record);
+                self.flush()?;
+            }
+            GrantScope::Session => {
+                self.session
+                    .entry(storage_key)
+                    .or_default()
+                    .insert(perm_key, record);
             }
         }
         Ok(())
@@ -295,11 +353,17 @@ impl PermissionPrompter for FixedPrompter {
 pub struct PermissionChecker<P: PermissionPrompter> {
     store: PermissionStore,
     prompter: P,
+    /// 网络访问策略。
+    network_policy: NetworkPolicy,
 }
 
 impl<P: PermissionPrompter> PermissionChecker<P> {
     pub fn new(store: PermissionStore, prompter: P) -> Self {
-        Self { store, prompter }
+        Self {
+            store,
+            prompter,
+            network_policy: NetworkPolicy::default(),
+        }
     }
 
     pub fn store(&self) -> &PermissionStore {
@@ -308,6 +372,38 @@ impl<P: PermissionPrompter> PermissionChecker<P> {
 
     pub fn store_mut(&mut self) -> &mut PermissionStore {
         &mut self.store
+    }
+
+    /// 设置网络访问策略。
+    pub fn set_network_policy(&mut self, policy: NetworkPolicy) {
+        self.network_policy = policy;
+    }
+
+    /// 获取网络访问策略。
+    pub fn network_policy(&self) -> &NetworkPolicy {
+        &self.network_policy
+    }
+
+    /// 检查网络访问是否被允许。
+    ///
+    /// 如果 URL 被网络策略禁止，返回错误。
+    pub fn check_network_access(&self, url: &str) -> Result<(), PermissionError> {
+        if !self.network_policy.is_url_allowed(url) {
+            // 解析 URL 获取更多信息
+            if let Ok(parsed) = url::Url::parse(url) {
+                let domain = parsed.host_str().unwrap_or("unknown").to_string();
+                let protocol = parsed.scheme().to_string();
+                let port = parsed.port().unwrap_or(0);
+
+                return Err(PermissionError::NetworkAccessDenied {
+                    url: url.to_string(),
+                    domain,
+                    protocol,
+                    port,
+                });
+            }
+        }
+        Ok(())
     }
 
     /// 校验插件声明的全部权限。任一项被拒即整体失败。
@@ -355,7 +451,17 @@ impl<P: PermissionPrompter> PermissionChecker<P> {
 
         // 已有决定（会话记录优先）就直接采纳。
         // 高危的「每会话首次询问」由 `Session` 记录在启动时被清空来实现。
-        if let Some(record) = self.store.lookup(plugin_id, permission) {
+        //
+        // 优先检查工具级权限记录，如果没有则检查插件级权限记录。
+        let record = if let Some(tool_name) = tool {
+            self.store
+                .lookup_tool(plugin_id, tool_name, permission)
+                .or_else(|| self.store.lookup(plugin_id, permission))
+        } else {
+            self.store.lookup(plugin_id, permission)
+        };
+
+        if let Some(record) = record {
             return if record.granted {
                 Ok(())
             } else {
@@ -388,18 +494,48 @@ impl<P: PermissionPrompter> PermissionChecker<P> {
 
         match decision {
             PromptDecision::AllowAlways => {
-                self.store
-                    .record(plugin_id, permission, GrantRecord::always(true))?;
+                // 如果有工具名，记录工具级权限；否则记录插件级权限
+                if let Some(tool_name) = tool {
+                    self.store.record_tool(
+                        plugin_id,
+                        tool_name,
+                        permission,
+                        GrantRecord::always(true),
+                    )?;
+                } else {
+                    self.store
+                        .record(plugin_id, permission, GrantRecord::always(true))?;
+                }
                 Ok(())
             }
             PromptDecision::AllowSession => {
-                self.store
-                    .record(plugin_id, permission, GrantRecord::session(true))?;
+                // 如果有工具名，记录工具级权限；否则记录插件级权限
+                if let Some(tool_name) = tool {
+                    self.store.record_tool(
+                        plugin_id,
+                        tool_name,
+                        permission,
+                        GrantRecord::session(true),
+                    )?;
+                } else {
+                    self.store
+                        .record(plugin_id, permission, GrantRecord::session(true))?;
+                }
                 Ok(())
             }
             PromptDecision::DenyAlways => {
-                self.store
-                    .record(plugin_id, permission, GrantRecord::always(false))?;
+                // 如果有工具名，记录工具级权限；否则记录插件级权限
+                if let Some(tool_name) = tool {
+                    self.store.record_tool(
+                        plugin_id,
+                        tool_name,
+                        permission,
+                        GrantRecord::always(false),
+                    )?;
+                } else {
+                    self.store
+                        .record(plugin_id, permission, GrantRecord::always(false))?;
+                }
                 Err(PermissionError::Denied {
                     plugin_id: plugin_id.to_string(),
                     permission: permission.to_string(),
@@ -487,6 +623,14 @@ pub enum PermissionError {
         reason: DenyReason,
     },
 
+    #[error("网络访问被禁止：URL `{url}`（域名：{domain}，协议：{protocol}，端口：{port}）")]
+    NetworkAccessDenied {
+        url: String,
+        domain: String,
+        protocol: String,
+        port: u16,
+    },
+
     #[error("授权记录读写失败：{0}")]
     Storage(#[from] JsonIoError),
 
@@ -497,7 +641,10 @@ pub enum PermissionError {
 impl PermissionError {
     /// 是否为「被拒绝」而非「基础设施故障」。审计日志据此区分记录级别。
     pub fn is_denied(&self) -> bool {
-        matches!(self, PermissionError::Denied { .. })
+        matches!(
+            self,
+            PermissionError::Denied { .. } | PermissionError::NetworkAccessDenied { .. }
+        )
     }
 }
 

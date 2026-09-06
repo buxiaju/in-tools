@@ -144,4 +144,61 @@ def do_ip(args, ctx):
     return {"hostname": hostname, "local_ip": local_ip, "external_ip": external_ip}
 
 
+@plugin.tool(
+    "net:request",
+    "发送完整的 HTTP 请求（支持 GET/POST/PUT/DELETE 等方法）",
+    {
+        "type": "object",
+        "required": ["url"],
+        "properties": {
+            "url": {"type": "string", "description": "请求 URL"},
+            "method": {"type": "string", "description": "HTTP 方法，默认 GET"},
+            "headers": {"type": "object", "description": "请求头"},
+            "body": {"type": "string", "description": "请求体（POST/PUT 时使用）"},
+            "timeout": {"type": "integer", "description": "超时秒数，默认 15"},
+        },
+    },
+)
+def do_request(args, ctx):
+    url = args["url"]
+    method = args.get("method", "GET").upper()
+    headers = args.get("headers", {})
+    body = args.get("body")
+    timeout = args.get("timeout", 15)
+
+    # 设置默认 User-Agent
+    if "User-Agent" not in headers:
+        headers["User-Agent"] = "InTools/1.0"
+
+    try:
+        # 准备请求体
+        data = None
+        if body and method in ("POST", "PUT", "PATCH"):
+            data = body.encode("utf-8") if isinstance(body, str) else body
+
+        req = urllib.request.Request(url, data=data, headers=headers, method=method)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            response_body = resp.read().decode("utf-8", errors="replace")
+            return {
+                "status": resp.status,
+                "headers": dict(resp.headers),
+                "body": response_body,
+                "length": len(response_body),
+            }
+    except urllib.error.HTTPError as e:
+        # 读取错误响应体
+        error_body = ""
+        try:
+            error_body = e.read().decode("utf-8", errors="replace")
+        except Exception:
+            pass
+        return {
+            "status": e.code,
+            "error": str(e),
+            "body": error_body,
+        }
+    except Exception as e:
+        raise PluginError(ErrorCode.INTERNAL, f"HTTP 请求失败：{e}")
+
+
 plugin.start()

@@ -82,21 +82,45 @@ pub fn bundled_plugins_dir() -> Result<PathBuf, SeedError> {
     Ok(dir.join("plugins"))
 }
 
-/// 生产入口：从随包插件目录播种到 `target_root/system/`。
+/// 生产入口：从随包插件目录播种到 `target_root/system/` 和 `target_root/test/`。
 ///
-/// 系统插件与用户插件隔离：`target_root/system/` 存放随安装包分发的插件，
-/// `target_root/user/` 存放用户自行安装的插件。
+/// 播种规则：
+/// - 随包目录下的 `system/` 子目录 → `target_root/system/`（系统核心插件）
+/// - 随包目录下的 `test/` 子目录 → `target_root/test/`（测试插件）
+/// - 根目录下的其他插件（SDK、demo）不播种，它们不需要出现在运行时目录中。
+/// - 确保 `user/` 目录存在（供用户安装插件用）。
 pub fn seed_builtin_plugins(target_root: &Path) -> Result<SeedOutcome, SeedError> {
-    let system_dir = target_root.join("system");
-    let result = seed_from(&bundled_plugins_dir()?, &system_dir);
-    // 播种成功或已存在时，确保 user 目录也存在（供用户安装插件用）。
-    if result.is_ok() {
-        let user_dir = target_root.join("user");
-        if !user_dir.exists() {
-            let _ = fs::create_dir_all(&user_dir);
-        }
+    let source = bundled_plugins_dir()?;
+
+    // 播种 system 插件
+    let system_source = source.join("system");
+    let system_target = target_root.join("system");
+    let system_result = seed_from(&system_source, &system_target);
+
+    // 播种 test 插件
+    let test_source = source.join("test");
+    let test_target = target_root.join("test");
+    let test_result = seed_from(&test_source, &test_target);
+
+    // 确保 user 目录存在
+    let user_dir = target_root.join("user");
+    if !user_dir.exists() {
+        let _ = fs::create_dir_all(&user_dir);
     }
-    result
+
+    // 任一成功即算成功
+    match (system_result, test_result) {
+        (Ok(SeedOutcome::Seeded { plugins: n1 }), Ok(SeedOutcome::Seeded { plugins: n2 })) => {
+            Ok(SeedOutcome::Seeded { plugins: n1 + n2 })
+        }
+        (Ok(SeedOutcome::Seeded { plugins }), _) | (_, Ok(SeedOutcome::Seeded { plugins })) => {
+            Ok(SeedOutcome::Seeded { plugins })
+        }
+        (Ok(SeedOutcome::Skipped(_)), Ok(SeedOutcome::Skipped(_))) => {
+            Ok(SeedOutcome::Skipped(SkipReason::TargetExists))
+        }
+        (Err(e), _) | (_, Err(e)) => Err(e),
+    }
 }
 
 /// 播种实现本体，源目录作为参数传入。

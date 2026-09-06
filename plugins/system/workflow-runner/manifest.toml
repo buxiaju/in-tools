@@ -1,4 +1,4 @@
-[plugin]
+﻿[plugin]
 id = "com.intools.workflow-runner"
 name = "工作流"
 version = "1.0.0"

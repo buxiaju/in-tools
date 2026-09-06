@@ -1,4 +1,4 @@
-[plugin]
+﻿[plugin]
 id = "com.intools.system-info"
 name = "系统信息"
 version = "1.0.0"
@@ -103,6 +103,6 @@ columns = [
 usage_file = "README.md"
 
 [lifecycle]
-mode = "on-demand"
+mode = "startup"
 idle_timeout_sec = 300
 restart_policy = "on-failure"

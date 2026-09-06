@@ -100,29 +100,96 @@ def get_screen_size():
 
 OCR_PS_SCRIPT = r"""
 param([string]$ImagePath, [string]$Language = "")
-$ErrorActionPreference = "Stop"
-[Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType=WindowsRuntime] | Out-Null
-[Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType=WindowsRuntime] | Out-Null
-[Windows.Storage.StorageFile, Windows.Foundation, ContentType=WindowsRuntime] | Out-Null
-[Windows.Storage.FileAccessMode, Windows.Foundation, ContentType=WindowsRuntime] | Out-Null
-[Windows.Graphics.Imaging.SoftwareBitmap, Windows.Foundation, ContentType=WindowsRuntime] | Out-Null
-function Await($AsyncOperation, $Type) { $task = $AsyncOperation.AsTask(); $task.Wait(); return $task.Result }
-$file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($ImagePath)) ([Windows.Storage.StorageFile])
-$stream = Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])
-$decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
-$bitmap = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
-if ($Language -ne "") {
-    $lang = New-Object Windows.Globalization.Language($Language)
-    $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($lang)
-    if (-not $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }
-} else { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }
-if (-not $engine) { Write-Error "无法创建 OCR 引擎"; exit 1 }
-$result = Await ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
-$lines = @(); foreach ($line in $result.Lines) { $lines += $line.Text }
-$output = @{ text = $result.Text; lines = $lines; language = $engine.RecognizerLanguage.LanguageTag; word_count = ($result.Text -split '\s+' | Where-Object { $_ -ne '' }).Count }
-$output | ConvertTo-Json -Depth 5
-$stream.Dispose()
+
+Add-Type -TypeDefinition @"
+using System;
+using System.Threading.Tasks;
+using Windows.Media.Ocr;
+using Windows.Graphics.Imaging;
+using Windows.Storage;
+using Windows.Globalization;
+
+public class OcrHelper {
+    public static string Recognize(string imagePath, string language) {
+        try {
+            return RecognizeAsync(imagePath, language).GetAwaiter().GetResult();
+        } catch (Exception e) {
+            return "{\"error\":\"" + e.Message.Replace("\"", "\\\"") + "\"}";
+        }
+    }
+
+    static async Task<string> RecognizeAsync(string imagePath, string language) {
+        var file = await StorageFile.GetFileFromPathAsync(imagePath);
+        var stream = await file.OpenAsync(FileAccessMode.Read);
+        var decoder = await BitmapDecoder.CreateAsync(stream);
+        var bitmap = await decoder.GetSoftwareBitmapAsync();
+
+        OcrEngine engine;
+        if (!string.IsNullOrEmpty(language)) {
+            var lang = new Language(language);
+            engine = OcrEngine.TryCreateFromLanguage(lang);
+            if (engine == null) engine = OcrEngine.TryCreateFromUserProfileLanguages();
+        } else {
+            engine = OcrEngine.TryCreateFromUserProfileLanguages();
+        }
+        if (engine == null) return "{\"error\":\"OCR engine unavailable\"}";
+
+        var result = await engine.RecognizeAsync(bitmap);
+        var lines = new System.Collections.Generic.List<string>();
+        foreach (var line in result.Lines) lines.Add(line.Text);
+
+        var json = new System.Text.StringBuilder();
+        json.Append("{\"text\":\"");
+        json.Append(result.Text.Replace("\\", "\\\\").Replace("\"", "\\\""));
+        json.Append("\",\"lines\":[");
+        for (int i = 0; i < lines.Count; i++) {
+            if (i > 0) json.Append(",");
+            json.Append("\"");
+            json.Append(lines[i].Replace("\\", "\\\\").Replace("\"", "\\\""));
+            json.Append("\"");
+        }
+        json.Append("],\"language\":\"");
+        json.Append(engine.RecognizerLanguage.LanguageTag);
+        json.Append("\",\"word_count\":");
+        json.Append(result.Text.Split(new char[]{' '}, StringSplitOptions.RemoveEmptyEntries).Length);
+        json.Append("}");
+        stream.Dispose();
+        return json.ToString();
+    }
+}
+"@
+
+$result = [OcrHelper]::Recognize($ImagePath, $Language)
+Write-Output $result
 """
+
+
+def run_ocr(image_path, language=""):
+    """通过 C# 内联代码调用 Windows OCR 识别图片文字。"""
+    script_path = os.path.join(tempfile.gettempdir(), f"intools_ocr_{os.getpid()}.ps1")
+    try:
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write(OCR_PS_SCRIPT)
+        cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script_path, "-ImagePath", image_path]
+        if language:
+            cmd.extend(["-Language", language])
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=30)
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or "OCR failed")
+        output = result.stdout.strip()
+        idx = output.find("{")
+        if idx >= 0:
+            output = output[idx:]
+        return json.loads(output)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("OCR timeout")
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"OCR output parse error: {e}")
+    finally:
+        try:
+            os.unlink(script_path)
+        except OSError:
+            pass
 
 
 def run_ocr(image_path, language=""):
