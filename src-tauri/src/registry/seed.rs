@@ -82,9 +82,21 @@ pub fn bundled_plugins_dir() -> Result<PathBuf, SeedError> {
     Ok(dir.join("plugins"))
 }
 
-/// 生产入口：从随包插件目录播种到 `target_root`。
+/// 生产入口：从随包插件目录播种到 `target_root/system/`。
+///
+/// 系统插件与用户插件隔离：`target_root/system/` 存放随安装包分发的插件，
+/// `target_root/user/` 存放用户自行安装的插件。
 pub fn seed_builtin_plugins(target_root: &Path) -> Result<SeedOutcome, SeedError> {
-    seed_from(&bundled_plugins_dir()?, target_root)
+    let system_dir = target_root.join("system");
+    let result = seed_from(&bundled_plugins_dir()?, &system_dir);
+    // 播种成功或已存在时，确保 user 目录也存在（供用户安装插件用）。
+    if result.is_ok() {
+        let user_dir = target_root.join("user");
+        if !user_dir.exists() {
+            let _ = fs::create_dir_all(&user_dir);
+        }
+    }
+    result
 }
 
 /// 播种实现本体，源目录作为参数传入。

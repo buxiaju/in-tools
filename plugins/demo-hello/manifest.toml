@@ -1,0 +1,46 @@
+[plugin]
+id = "com.example.demohello"
+name = "示范插件"
+version = "1.0.0"
+author = ""
+description = "示范插件"
+
+[exec]
+command = "python"
+args = ["-u", "main.py"]
+
+[[tools]]
+name = "demo:hello:echo"
+description = "原样返回传入的文本"
+[tools.input_schema]
+type = "object"
+required = ["text"]
+[tools.input_schema.properties.text]
+type = "string"
+description = "要回显的文本"
+
+[[tools]]
+name = "demo:hello:info"
+description = "返回插件版本与运行环境信息"
+[tools.input_schema]
+type = "object"
+
+[capabilities]
+permissions = []
+
+[[result_display]]
+tool = "demo:hello:info"
+type = "kv"
+fields = [
+  { key = "plugin", label = "插件" },
+  { key = "version", label = "版本" },
+  { key = "runtime", label = "运行时" },
+]
+
+[docs]
+usage_file = "README.md"
+
+[lifecycle]
+mode = "on-demand"
+idle_timeout_sec = 300
+restart_policy = "on-failure"

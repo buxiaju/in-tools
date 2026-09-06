@@ -1,0 +1,48 @@
+[plugin]
+id = "com.intools.workflow-runner"
+name = "工作流"
+version = "1.0.0"
+author = "InTools"
+description = "串联多个插件工具，编排自动化工作流（演示反向 RPC 与跨插件调用）"
+
+[exec]
+command = "node"
+args = ["main.js"]
+
+[[tools]]
+name = "workflow:list"
+description = "列出宿主中所有可用的工具（跨插件）"
+[tools.input_schema]
+type = "object"
+
+[[tools]]
+name = "workflow:run"
+description = "执行内置工作流，逐步调用工具并推送进度"
+[tools.input_schema]
+type = "object"
+required = ["workflow"]
+[tools.input_schema.properties.workflow]
+type = "string"
+description = "工作流名称，如 health-check"
+
+[[tools]]
+name = "workflow:chain"
+description = "按顺序执行用户指定的工具链，前一步的结果可传入下一步"
+[tools.input_schema]
+type = "object"
+required = ["steps"]
+[tools.input_schema.properties.steps]
+type = "array"
+description = "工具步骤列表"
+
+[capabilities]
+permissions = []
+
+[docs]
+usage_file = "README.md"
+
+[lifecycle]
+mode = "on-demand"
+idle_timeout_sec = 300
+restart_policy = "on-failure"
+request_timeout_sec = 120

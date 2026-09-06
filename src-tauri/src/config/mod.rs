@@ -125,6 +125,36 @@ pub mod paths {
         Ok(logs_dir()?.join("mcp-audit.log"))
     }
 
+    /// 随安装包分发的文档目录。
+    ///
+    /// `tauri.conf.json` 的 `bundle.resources` 把仓库 `docs/` 整体拷到
+    /// 可执行文件旁的 `docs/`，安装/开发期同一路径——开发期 `tauri-build` 已经
+    /// 无条件把它拷进 `target/<profile>/docs`，所以读不到再退一步找 exe_dir/docs。
+    pub fn bundled_docs_dir() -> Result<PathBuf, PathError> {
+        let exe = std::env::current_exe()
+            .map_err(|err| PathError::NoExeDir(err.to_string()))?;
+        Ok(exe
+            .parent()
+            .ok_or_else(|| {
+                PathError::NoExeDir("可执行文件路径没有父目录，无法定位 docs/".to_string())
+            })?
+            .join("docs"))
+    }
+
+    pub fn bundled_doc(name: &str) -> Result<PathBuf, PathError> {
+        // 防止路径穿越——只允许平面文件名，不允许 `..` 或目录跳转。
+        if name.is_empty()
+            || name.contains('/')
+            || name.contains('\\')
+            || name.contains("..")
+        {
+            return Err(PathError::InvalidPluginId(format!(
+                "非法的文档路径 `{name}`"
+            )));
+        }
+        Ok(bundled_docs_dir()?.join(name))
+    }
+
     /// 每插件用户设置的存放目录。
     ///
     /// 与 `plugin-configs/` 不同：后者是插件自己经协议读写的配置，
@@ -510,6 +540,9 @@ impl UserShortcuts {
 pub enum PathError {
     #[error("无法定位用户主目录（HOME / USERPROFILE 未设置）")]
     NoHomeDir,
+
+    #[error("无法定位可执行文件目录：{0}")]
+    NoExeDir(String),
 
     #[error("非法插件 ID：`{0}`（禁止包含路径分隔符）")]
     InvalidPluginId(String),

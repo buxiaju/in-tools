@@ -8,13 +8,37 @@
 // 2. CSP 是 script-src 'self'，不允许行内 on* 属性，所有交互一律 addEventListener。
 // 3. 一切工具调用都走 call_tool command，前端不持有任何特权路径。
 
-const { invoke } = window.__TAURI__.core;
-const { listen } = window.__TAURI__.event;
+// Tauri 桥接。用 withGlobalTauri 注入的 window.__TAURI__ 在 webview 里通常是
+// 同步可用的，但为了不让桥缺失时把整个模块踩死在顶层（导致路由/侧边栏全部失效
+// 而只剩白屏），这里不直接解构，而是惰性取用：
+// - 桥就绪时，invoke/listen 透传真实实现；
+// - 桥缺失时，invoke/listen 返回一个已 reject 的 Promise，由既有 call() 的
+//   try/catch 和 subscribe() 的 .catch() 兜住，弹 toast 说明原因，
+//   页面结构（侧边栏、各视图切换）依然正常渲染。
+const __TAURI__ = window.__TAURI__;
+
+const invoke = (cmd, args) =>
+  new Promise((resolve, reject) => {
+    if (!__TAURI__ || !__TAURI__.core || typeof __TAURI__.core.invoke !== "function") {
+      reject(new Error("Tauri 桥未注入（window.__TAURI__ 不可用），无法调用后端命令"));
+      return;
+    }
+    __TAURI__.core.invoke(cmd, args).then(resolve, reject);
+  });
+
+const listen = (event, handler) =>
+  new Promise((resolve, reject) => {
+    if (!__TAURI__ || !__TAURI__.event || typeof __TAURI__.event.listen !== "function") {
+      reject(new Error("Tauri 桥未注入，无法订阅事件"));
+      return;
+    }
+    __TAURI__.event.listen(event, handler).then(resolve, reject);
+  });
 
 const EVENT_PERMISSION_PROMPT = "intools://permission-prompt";
 const EVENT_PLUGIN_NOTIFICATION = "intools://plugin-notification";
 
-const ROUTES = ["plugins", "chat", "permissions", "settings"];
+const ROUTES = ["plugins", "chat", "permissions", "dev", "settings"];
 
 /** 已卸载但仍在内存注册表里的插件 id。后端删了目录，列表要重启才会真的消失。 */
 const uninstalled = new Set();
@@ -35,8 +59,10 @@ function clear(node) {
   node.replaceChildren();
 }
 
-function showEmpty(node, text) {
-  node.replaceChildren(el("p", "empty", text));
+function showEmpty(node, text, hint) {
+  const wrap = el("div", "empty");
+  wrap.innerHTML = `<div class="empty-icon"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="8" y="8" width="32" height="32" rx="4"/><path d="M18 20h12M18 26h8"/></svg></div><p>${text}</p>${hint ? `<p class="empty-hint">${hint}</p>` : ""}`;
+  node.replaceChildren(wrap);
 }
 
 let toastTimer = null;
@@ -78,6 +104,17 @@ async function withBusy(button, fn) {
 
 // ─────────────────── 插件页 ───────────────────
 
+/** 按权限动作部分判断危险度，用于药丸着色。 */
+function permPermClass(perm) {
+  // "file:write:*" → action = "write"
+  const action = perm.split(":")[1]?.split(/[[(]/)[0];
+  if (["control", "spawn", "exec", "install", "uninstall", "socket"].includes(action))
+    return "perm-high";
+  if (["write", "capture", "record", "modify", "manage"].includes(action))
+    return "perm-mid";
+  return "";
+}
+
 const STATE_LABELS = {
   stopped: "已停止",
   starting: "启动中",
@@ -85,6 +122,12 @@ const STATE_LABELS = {
   busy: "忙碌",
   stopping: "停止中",
   error: "错误",
+};
+
+const CATEGORY_LABELS = {
+  system: "系统",
+  test: "测试",
+  user: "用户",
 };
 
 function pluginCard(p) {
@@ -96,6 +139,9 @@ function pluginCard(p) {
   title.append(el("strong", null, p.name), el("span", "mono", p.id));
   // badge 的状态修饰类与后端 state_label 的取值一一对应。
   title.append(el("span", `badge ${p.state}`, STATE_LABELS[p.state] ?? p.state));
+  // 分类标签：系统 / 测试 / 用户
+  const catLabel = CATEGORY_LABELS[p.category] || p.category;
+  title.append(el("span", `badge cat-${p.category}`, catLabel));
   // 禁用是独立于运行态的持久化标志——让用户在列表里一眼看到，避免把
   // 「启动/停止按钮失效」误归咎于 bug。
   if (!p.enabled) {
@@ -108,45 +154,39 @@ function pluginCard(p) {
     actions.append(el("span", "field-hint", "已卸载，点重载即可移除"));
   } else {
     const running = p.state !== "stopped" && p.state !== "error";
-    const toggle = el("button", "btn", running ? "停止" : "启动");
-    toggle.addEventListener("click", () =>
-      withBusy(toggle, async () => {
-        const ok = await call(running ? "stop_plugin" : "start_plugin", {
-          pluginId: p.id,
-        });
-        if (ok !== undefined) {
-          toast(running ? `${p.name} 已停止` : `${p.name} 已启动`);
-          await renderPlugins();
+    const primaryLabel = !p.enabled ? "启用" : running ? "停止" : "启动";
+    const primary = el("button", "btn primary", primaryLabel);
+    primary.addEventListener("click", () =>
+      withBusy(primary, async () => {
+        if (!p.enabled) {
+          const changed = await call("set_plugin_enabled", { pluginId: p.id, enabled: true });
+          if (changed !== undefined) {
+            await call("start_plugin", { pluginId: p.id });
+            toast(`${p.name} 已启用并启动`);
+            await renderPlugins();
+          }
+        } else if (running) {
+          const ok = await call("stop_plugin", { pluginId: p.id });
+          if (ok !== undefined) {
+            toast(`${p.name} 已停止`);
+            await renderPlugins();
+          }
+        } else {
+          const ok = await call("start_plugin", { pluginId: p.id });
+          if (ok !== undefined) {
+            toast(`${p.name} 已启动`);
+            await renderPlugins();
+          }
         }
       }),
     );
 
-    // 「启用 / 禁用」是持久化标志，独立于「启动 / 停止」：
-    // 停止只回收当前进程，下一次按需调用还会被拉起来；禁用则拦截
-    // `ensure_running` 与 `start_eager_plugins`，并把工具从列表里隐掉。
-    const enable = el(
-      "button",
-      `btn ${p.enabled ? "" : "muted"}`,
-      p.enabled ? "禁用" : "启用",
-    );
-    enable.addEventListener("click", () =>
-      withBusy(enable, async () => {
-        const next = !p.enabled;
-        const changed = await call("set_plugin_enabled", {
-          pluginId: p.id,
-          enabled: next,
-        });
-        if (changed !== undefined) {
-          toast(next ? `${p.name} 已启用` : `${p.name} 已禁用（不再自动启动）`);
-          await renderPlugins();
-        }
-      }),
-    );
+    const cfg = el("button", "btn", "设置");
+    cfg.addEventListener("click", () => openPluginSettings(p.id, p.name, p.enabled));
 
     const remove = el("button", "btn danger", "卸载");
     remove.addEventListener("click", () =>
       withBusy(remove, async () => {
-        // 删目录不可逆，值得一次确认。
         if (!confirm(`卸载 ${p.name}？将删除插件目录并撤销其全部授权。`)) return;
         const ok = await call("uninstall_plugin", { pluginId: p.id });
         if (ok !== undefined) {
@@ -157,12 +197,8 @@ function pluginCard(p) {
       }),
     );
 
-    const cfg = el("button", "btn", "设置");
-    cfg.addEventListener("click", () => openPluginSettings(p.id, p.name));
+    actions.append(primary, cfg, remove);
 
-    actions.append(enable, toggle, cfg, remove);
-
-    // 说明与快捷键都是插件作者的可选项：没声明就不放按钮，免得点开只看到报错。
     if (p.has_docs) {
       const docs = el("button", "btn", "使用说明");
       docs.addEventListener("click", () => withBusy(docs, () => openPluginDocs(p.id)));
@@ -179,33 +215,141 @@ function pluginCard(p) {
   head.append(actions);
   card.append(head);
 
-  if (p.description) card.append(el("p", "card-meta", p.description));
+  if (p.description) card.append(el("p", "card-desc", p.description));
 
   const meta = [`v${p.version}`, p.author, p.lifecycle];
   if (p.inflight > 0) meta.push(`进行中 ${p.inflight}`);
   if (p.restart_attempts > 0) meta.push(`重启 ${p.restart_attempts} 次`);
   card.append(el("p", "card-meta", meta.filter(Boolean).join(" · ")));
 
-  if (p.tools.length > 0) {
-    card.append(el("p", "card-meta", `工具：${p.tools.join("、")}`));
-  }
-  if (p.permissions.length > 0) {
-    card.append(el("p", "card-meta", `权限：${p.permissions.join("、")}`));
+  // 工具 + 权限药丸行
+  if (p.tools.length > 0 || p.permissions.length > 0) {
+    const pills = el("div", "card-pills");
+    for (const t of p.tools) {
+      const pill = el("span", "pill tool", t);
+      pills.append(pill);
+    }
+    for (const perm of p.permissions) {
+      const cls = permPermClass(perm);
+      const pill = el("span", `pill perm ${cls}`, perm);
+      pills.append(pill);
+    }
+    card.append(pills);
   }
   if (p.last_error) card.append(el("p", "card-error", p.last_error));
 
+  // 可折叠详情区
+  const detail = el("div", "card-detail hidden");
+  detail.dataset.pluginId = p.id;
+
+  // 工具表格
+  if (p.tools.length > 0) {
+    detail.append(el("h4", null, `工具（${p.tools.length}）`));
+    const tbl = el("table", "detail-table");
+    tbl.innerHTML = `<thead><tr><th>工具名</th><th>权限</th></tr></thead>`;
+    const tbody = document.createElement("tbody");
+    for (const t of p.tools) {
+      const tr = document.createElement("tr");
+      tr.append(el("td", "mono", t));
+      const permCell = el("td");
+      for (const perm of p.permissions) {
+        permCell.append(el("span", `pill perm ${permPermClass(perm)}`, perm));
+      }
+      tr.append(permCell);
+      tbody.append(tr);
+    }
+    tbl.append(tbody);
+    detail.append(tbl);
+  }
+
+  // 结果展示声明
+  if (p.result_display && p.result_display.length > 0) {
+    detail.append(el("h4", null, "结果展示"));
+    for (const rd of p.result_display) {
+      const row = el("div", "detail-row");
+      row.append(
+        el("span", "mono", rd.tool),
+        el("span", "field-hint", `→ ${rd.display_type || rd.type || "raw"}`),
+      );
+      detail.append(row);
+    }
+  }
+
+  // 权限详情
+  if (p.permissions.length > 0) {
+    detail.append(el("h4", null, "权限声明"));
+    for (const perm of p.permissions) {
+      const row = el("div", "detail-row");
+      const cls = permPermClass(perm);
+      const level = cls === "perm-high" ? "高危" : cls === "perm-mid" ? "中危" : "低危";
+      row.append(
+        el("span", "mono", perm),
+        el("span", `badge ${cls || "idle"}`, level),
+      );
+      detail.append(row);
+    }
+  }
+
+  card.append(detail);
+
+  // 整个卡片头部可点击展开/折叠
+  head.style.cursor = "pointer";
+  head.addEventListener("click", (e) => {
+    // 按钮点击不触发折叠
+    if (e.target.closest("button")) return;
+    detail.classList.toggle("hidden");
+  });
+
   return card;
 }
+
+/** 缓存完整插件列表，供搜索过滤用。 */
+let allPlugins = [];
 
 async function renderPlugins() {
   const list = $("plugins-list");
   const plugins = await call("list_plugins");
   if (!plugins) return;
-  if (plugins.length === 0) {
-    showEmpty(list, "插件目录为空。在设置页确认插件目录后重启。");
+  allPlugins = plugins;
+  applyPluginFilter();
+}
+
+/** 按搜索框内容过滤并渲染插件列表。 */
+function applyPluginFilter() {
+  const list = $("plugins-list");
+  const q = ($("plugin-filter")?.value || "").toLowerCase().trim();
+
+  const filtered = q
+    ? allPlugins.filter((p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.id.toLowerCase().includes(q) ||
+        p.description.toLowerCase().includes(q) ||
+        p.tools.some((t) => t.toLowerCase().includes(q))
+      )
+    : allPlugins;
+
+  if (filtered.length === 0) {
+    showEmpty(list, q ? `没有匹配「${q}」的插件` : "插件目录为空。在设置页确认插件目录后重启。");
     return;
   }
-  list.replaceChildren(...plugins.map(pluginCard));
+
+  // 按分类分组：系统 → 测试 → 用户
+  const groups = { system: [], test: [], user: [] };
+  for (const p of filtered) {
+    (groups[p.category] || groups.user).push(p);
+  }
+
+  const fragment = document.createDocumentFragment();
+  for (const [cat, plugins] of Object.entries(groups)) {
+    if (plugins.length === 0) continue;
+    const header = el("div", "category-header");
+    const catLabel = CATEGORY_LABELS[cat] || cat;
+    header.append(el("span", `badge cat-${cat}`, catLabel));
+    header.append(el("span", "category-count", `${plugins.length} 个插件`));
+    fragment.append(header);
+    fragment.append(...plugins.map(pluginCard));
+  }
+  list.replaceChildren(fragment);
 }
 
 /**
@@ -263,8 +407,20 @@ function appendMsg(kind, head, body) {
   msg.append(el("div", "msg-head", head));
   if (body !== undefined) msg.append(el("div", "msg-body", body));
   log.append(msg);
-  // 手动调用与流式通知都应把最新内容顶到眼前。
   log.scrollTop = log.scrollHeight;
+  return msg;
+}
+
+/** 显示 AI 打字指示器，返回元素供后续移除。 */
+function appendTyping() {
+  const log = $("chat-log");
+  const msg = el("div", "msg typing");
+  const dots = el("div", "typing-dots");
+  dots.append(el("span"), el("span"), el("span"));
+  msg.append(el("div", "msg-head", "AI"), dots);
+  log.append(msg);
+  log.scrollTop = log.scrollHeight;
+  return msg;
 }
 
 function stringify(value) {
@@ -277,18 +433,25 @@ async function submitChat(event) {
   const message = input.value.trim();
   if (!message) return;
 
+  // 隐藏欢迎页
+  $("chat-welcome")?.remove();
+
   appendMsg("call", "你", message);
   input.value = "";
 
   const button = $("chat-form").querySelector("button[type=submit]");
   await withBusy(button, async () => {
+    // 显示打字指示器
+    const typing = appendTyping();
     try {
       const result = await invoke("call_tool", {
         toolName: "ai:chat",
         args: { message },
       });
+      typing.remove();
       appendMsg("result", "AI", result.response || stringify(result));
     } catch (e) {
+      typing.remove();
       appendMsg("error", "AI 失败", String(e));
     }
   });
@@ -542,9 +705,11 @@ async function copySnippet() {
 // ─────────────────── 插件设置弹窗 ───────────────────
 
 let currentSettingsPluginId = null;
+let currentSettingsPluginEnabled = true;
 
-async function openPluginSettings(pluginId, pluginName) {
+async function openPluginSettings(pluginId, pluginName, enabled) {
   currentSettingsPluginId = pluginId;
+  currentSettingsPluginEnabled = !!enabled;
   $("ps-title").textContent = `${pluginName} 设置`;
 
   const data = await call("get_plugin_settings", { pluginId });
@@ -553,10 +718,37 @@ async function openPluginSettings(pluginId, pluginName) {
   const form = $("ps-form");
   form.replaceChildren();
 
+  // 「启用插件」开关
+  const enableLabel = el("label", "field checkbox");
+  const enableInput = el("input");
+  enableInput.type = "checkbox";
+  enableInput.id = "ps-enabled";
+  enableInput.checked = currentSettingsPluginEnabled;
+  enableLabel.append(enableInput, el("span", null, "启用插件"));
+  form.append(enableLabel);
+
+  if (data.fields && data.fields.length > 0) {
+    const sep = el("hr");
+    sep.style.margin = "12px 0";
+    form.append(sep);
+  }
+
   if (!data.fields || data.fields.length === 0) {
     form.append(el("p", "empty", "该插件无可配置参数。"));
   } else {
+    // 按 group 分组渲染
+    let currentGroup = null;
     for (const f of data.fields) {
+      // 分组处理
+      const groupKey = f.group || null;
+      if (groupKey !== currentGroup) {
+        currentGroup = groupKey;
+        if (groupKey) {
+          const groupTitle = el("h4", "settings-group-title", groupKey);
+          form.append(groupTitle);
+        }
+      }
+
       const label = el("label", "field");
       label.append(el("span", "label", f.label));
 
@@ -569,8 +761,7 @@ async function openPluginSettings(pluginId, pluginName) {
         input.checked = !!current;
         label.classList.add("checkbox");
         label.insertBefore(input, label.firstChild);
-        $("ps-form").append(label);
-        continue;
+        form.append(label);
       } else if (f.field_type === "select") {
         input = el("select", "input");
         for (const opt of f.options) {
@@ -579,19 +770,66 @@ async function openPluginSettings(pluginId, pluginName) {
           if (opt === current) o.selected = true;
           input.append(o);
         }
+        input.dataset.key = f.key;
+        input.dataset.type = f.field_type;
+        label.append(input);
+        form.append(label);
+      } else if (f.field_type === "color") {
+        input = el("input", "input");
+        input.type = "color";
+        input.value = current || "#000000";
+        input.dataset.key = f.key;
+        input.dataset.type = f.field_type;
+        label.append(input);
+        form.append(label);
+      } else if (f.field_type === "password") {
+        input = el("input", "input");
+        input.type = "password";
+        input.value = current ?? "";
+        if (f.placeholder) input.placeholder = f.placeholder;
+        input.dataset.key = f.key;
+        input.dataset.type = f.field_type;
+        label.append(input);
+        form.append(label);
+      } else if (f.field_type === "path") {
+        const pathWrap = el("div", "path-input-wrap");
+        input = el("input", "input");
+        input.type = "text";
+        input.value = current ?? "";
+        if (f.placeholder) input.placeholder = f.placeholder;
+        input.dataset.key = f.key;
+        input.dataset.type = f.field_type;
+        pathWrap.append(input);
+        label.append(pathWrap);
+        form.append(label);
       } else if (f.field_type === "number") {
         input = el("input", "input");
         input.type = "number";
         input.value = current ?? "";
+        if (f.min !== undefined && f.min !== null) input.min = f.min;
+        if (f.max !== undefined && f.max !== null) input.max = f.max;
+        if (f.step !== undefined && f.step !== null) input.step = f.step;
+        if (f.placeholder) input.placeholder = f.placeholder;
+        input.dataset.key = f.key;
+        input.dataset.type = f.field_type;
+        label.append(input);
+        form.append(label);
       } else {
         input = el("input", "input");
         input.type = "text";
         input.value = current ?? "";
+        if (f.placeholder) input.placeholder = f.placeholder;
+        input.dataset.key = f.key;
+        input.dataset.type = f.field_type;
+        label.append(input);
+        form.append(label);
       }
-      input.dataset.key = f.key;
-      input.dataset.type = f.field_type;
-      label.append(input);
-      form.append(label);
+
+      // 字段描述
+      if (f.description) {
+        const desc = el("p", "field-desc", f.description);
+        form.append(desc);
+      }
     }
   }
 
@@ -604,6 +842,8 @@ async function savePluginSettingsModal() {
   const values = {};
 
   for (const input of form.querySelectorAll("input, select")) {
+    // 「启用插件」开关不走插件参数保存，单独在下面处理。
+    if (input.id === "ps-enabled") continue;
     const key = input.dataset.key;
     if (!key) continue;
     const type = input.dataset.type;
@@ -621,9 +861,120 @@ async function savePluginSettingsModal() {
     values,
   });
   if (ok !== undefined) {
+    // 启用状态有变化时同步到后端（持久化到 HostConfig.disabled_plugins）。
+    const enableInput = $("ps-enabled");
+    if (enableInput && enableInput.checked !== currentSettingsPluginEnabled) {
+      await call("set_plugin_enabled", {
+        pluginId: currentSettingsPluginId,
+        enabled: enableInput.checked,
+      });
+    }
     toast("设置已保存");
     $("plugin-settings-modal").hidden = true;
+    await renderPlugins();
   }
+}
+
+// ─────────────────── 结果展示渲染 ───────────────────
+
+/**
+ * 根据 result_display schema 渲染工具结果。
+ * 如果插件声明了 result_display，用结构化 UI 展示；否则降级为 JSON。
+ */
+function renderToolResult(result, resultDisplaySchema) {
+  // 没有 schema 或找到匹配的 schema 时，用 JSON 降级
+  if (!resultDisplaySchema || resultDisplaySchema.length === 0) {
+    return stringify(result);
+  }
+
+  // 尝试匹配（resultDisplaySchema 会在外部传入，这里只做渲染）
+  // 实际匹配逻辑在调用处
+  return renderResultWithSchema(result, resultDisplaySchema);
+}
+
+function renderResultWithSchema(result, schema) {
+  if (!schema) return stringify(result);
+
+  const wrap = el("div", "result-display");
+
+  if (schema.display_type === "kv") {
+    for (const field of schema.fields) {
+      const val = result[field.key];
+      if (val === undefined && !field.label) continue;
+      const row = el("div", "result-kv-row");
+      row.append(el("span", "result-kv-label", field.label));
+      row.append(el("span", "result-kv-value", val !== undefined ? String(val) : "—"));
+      wrap.append(row);
+    }
+  } else if (schema.display_type === "table") {
+    if (Array.isArray(result)) {
+      const table = el("table", "result-table");
+      const thead = el("tr");
+      for (const col of schema.columns) {
+        thead.append(el("th", null, col.label));
+      }
+      table.append(thead);
+      for (const row of result) {
+        const tr = el("tr");
+        for (const col of schema.columns) {
+          tr.append(el("td", null, row[col.key] !== undefined ? String(row[col.key]) : ""));
+        }
+        table.append(tr);
+      }
+      wrap.append(table);
+    } else {
+      wrap.textContent = stringify(result);
+    }
+  } else if (schema.display_type === "markdown") {
+    const md = schema.content_key ? result[schema.content_key] : result;
+    wrap.append(renderMarkdown(String(md || "")));
+  } else {
+    wrap.textContent = stringify(result);
+  }
+
+  return wrap;
+}
+
+/** 极简 markdown 渲染（支持标题、列表、代码块、粗体）。 */
+function renderMarkdown(text) {
+  const container = el("div", "result-markdown");
+  const lines = text.split("\n");
+  let inCode = false;
+  let codeBlock = [];
+
+  for (const line of lines) {
+    if (line.startsWith("```")) {
+      if (inCode) {
+        const pre = el("pre", "code-block");
+        pre.textContent = codeBlock.join("\n");
+        container.append(pre);
+        codeBlock = [];
+        inCode = false;
+      } else {
+        inCode = true;
+      }
+      continue;
+    }
+    if (inCode) {
+      codeBlock.push(line);
+      continue;
+    }
+    if (line.startsWith("# ")) {
+      container.append(el("h3", null, line.slice(2)));
+    } else if (line.startsWith("## ")) {
+      container.append(el("h4", null, line.slice(3)));
+    } else if (line.startsWith("- ")) {
+      container.append(el("li", null, line.slice(2)));
+    } else if (line.trim()) {
+      container.append(el("p", null, line));
+    }
+  }
+  if (inCode && codeBlock.length) {
+    const pre = el("pre", "code-block");
+    pre.textContent = codeBlock.join("\n");
+    container.append(pre);
+  }
+  return container;
 }
 
 // ─────────────────── 快捷键 ───────────────────
@@ -939,6 +1290,60 @@ async function openPluginDocs(pluginId) {
   search.focus();
 }
 
+/**
+ * 打开插件开发手册弹窗。共用 [`openPluginDocs`] 的弹窗、Markdown 渲染与
+ * 搜索框——渲染路径统一，省一份维护。
+ */
+async function openDevDoc() {
+  const content = await call("get_plugin_dev_doc");
+  if (content === null || content === undefined) return;
+  if (typeof content === "string" && content.length === 0) {
+    toast("开发手册不可用（随安装包分发的 docs/plugin-development.md 未找到）");
+    return;
+  }
+  $("docs-title").textContent = "插件开发手册";
+  $("docs-file").textContent = "docs/plugin-development.md";
+  const search = $("docs-search");
+  const body = $("docs-body");
+  body.replaceChildren(renderMarkdown(content));
+  body.scrollTop = 0;
+  search.value = "";
+  $("docs-modal").hidden = false;
+  search.focus();
+}
+
+/**
+ * 「插件开发」视图渲染：只显示章节级摘要，让用户一眼看到文档大致结构。
+ * 全文仍需打开弹窗，避免在主视图里塞下整本手册（432 行 + 主题混杂，
+ * 会在主视图里占屏过大）。
+ */
+async function renderDev() {
+  const summary = $("dev-summary");
+  if (!summary) return;
+  const content = await call("get_plugin_dev_doc");
+  if (!content) {
+    summary.replaceChildren(el("p", "field-hint", "开发手册加载失败。"));
+    return;
+  }
+  // 解析 H1 / H2，作为左侧章节目录的雏形。Markdown 简单到不值得引入解析器，
+  // 手写扫描足够。
+  const sections = [];
+  for (const line of content.split("\n")) {
+    if (line.startsWith("# ")) sections.push({ level: 1, title: line.slice(2).trim() });
+    else if (line.startsWith("## ")) sections.push({ level: 2, title: line.slice(3).trim() });
+  }
+  summary.replaceChildren(
+    el(
+      "p",
+      "field-hint",
+      `共 ${sections.filter((s) => s.level === 1).length} 章、${sections.filter((s) => s.level === 2).length} 节。点「打开开发手册」查看完整内容。`,
+    ),
+    ...sections.map((s) =>
+      el("div", `dev-section level-${s.level}`, s.title),
+    ),
+  );
+}
+
 /** 文档搜索：按文本内容过滤顶层元素，不匹配的隐藏。 */
 function filterDocs(query) {
   const q = query.trim().toLowerCase();
@@ -1061,6 +1466,7 @@ const RENDERERS = {
   plugins: renderPlugins,
   chat: () => {},
   permissions: renderPermissions,
+  dev: renderDev,
   settings: renderSettings,
 };
 
@@ -1085,6 +1491,9 @@ function bind() {
     .addEventListener("click", () =>
       withBusy(document.querySelector('[data-act="reload-plugins"]'), reloadPlugins),
     );
+
+  // 插件搜索：输入时实时过滤
+  $("plugin-filter")?.addEventListener("input", applyPluginFilter);
   document
     .querySelector('[data-act="reload-permissions"]')
     .addEventListener("click", renderPermissions);
@@ -1129,10 +1538,26 @@ function bind() {
     $("docs-modal").hidden = true;
   });
   $("docs-search").addEventListener("input", (e) => filterDocs(e.target.value));
+  $("dev-open").addEventListener("click", () => withBusy($("dev-open"), openDevDoc));
+  $("dev-reload").addEventListener("click", () => withBusy($("dev-reload"), renderDev));
+
+  // 对话页建议按钮
+  for (const btn of document.querySelectorAll(".chat-suggestion")) {
+    btn.addEventListener("click", () => {
+      $("chat-input").value = btn.dataset.msg;
+      $("chat-form").requestSubmit();
+    });
+  }
 
   window.addEventListener("hashchange", navigate);
 }
 
-bind();
+// bind() 注册事件监听器；其中任一 querySelector 返回 null 都会使后续监听器
+// 丢失。用 try-catch 包裹，保证 navigate() 始终执行、侧边栏始终可切换。
+try {
+  bind();
+} catch (err) {
+  console.error("[InTools] bind() 失败，部分交互可能不可用：", err);
+}
 subscribe();
 navigate();

@@ -1,0 +1,108 @@
+[plugin]
+id = "com.intools.system-info"
+name = "系统信息"
+version = "1.0.0"
+author = "InTools"
+description = "查看 CPU、内存、磁盘、网络、环境变量等系统信息（Node.js 插件）"
+
+[exec]
+command = "node"
+args = ["main.js"]
+
+[[tools]]
+name = "system:info"
+description = "返回操作系统、CPU、内存等基础系统信息"
+[tools.input_schema]
+type = "object"
+
+[[tools]]
+name = "system:cpu"
+description = "返回各 CPU 核心的型号、速度与使用率"
+[tools.input_schema]
+type = "object"
+
+[[tools]]
+name = "system:network"
+description = "列出所有网络接口及其 IPv4/IPv6 地址"
+[tools.input_schema]
+type = "object"
+
+[[tools]]
+name = "system:disk"
+description = "查询磁盘使用情况（仅 Windows）"
+[tools.input_schema]
+type = "object"
+
+[[tools]]
+name = "system:env"
+description = "列出环境变量，可通过 prefix 过滤前缀"
+[tools.input_schema]
+type = "object"
+properties.prefix = { type = "string", description = "过滤前缀，如 PATH、NODE_" }
+
+[capabilities]
+permissions = []
+
+[[result_display]]
+tool = "system:info"
+type = "kv"
+fields = [
+  { key = "hostname", label = "主机名" },
+  { key = "platform", label = "平台" },
+  { key = "arch", label = "架构" },
+  { key = "release", label = "系统版本" },
+  { key = "node_version", label = "Node.js" },
+  { key = "cpu_model", label = "CPU" },
+  { key = "cpu_cores", label = "核心数" },
+  { key = "total_memory_mb", label = "总内存(MB)" },
+  { key = "free_memory_mb", label = "可用内存(MB)" },
+  { key = "memory_usage_percent", label = "内存使用率(%)" },
+  { key = "uptime", label = "运行时间" },
+]
+
+[[result_display]]
+tool = "system:cpu"
+type = "table"
+columns = [
+  { key = "core", label = "核心" },
+  { key = "model", label = "型号" },
+  { key = "speed_mhz", label = "频率(MHz)" },
+  { key = "usage_percent", label = "使用率(%)" },
+]
+
+[[result_display]]
+tool = "system:network"
+type = "table"
+columns = [
+  { key = "interface", label = "接口" },
+  { key = "address", label = "地址" },
+  { key = "family", label = "协议" },
+  { key = "mac", label = "MAC" },
+]
+
+[[result_display]]
+tool = "system:disk"
+type = "table"
+columns = [
+  { key = "drive", label = "盘符" },
+  { key = "volume", label = "卷标" },
+  { key = "total_gb", label = "总容量(GB)" },
+  { key = "free_gb", label = "可用(GB)" },
+  { key = "usage_percent", label = "使用率(%)" },
+]
+
+[[result_display]]
+tool = "system:env"
+type = "table"
+columns = [
+  { key = "key", label = "变量名" },
+  { key = "value", label = "值" },
+]
+
+[docs]
+usage_file = "README.md"
+
+[lifecycle]
+mode = "on-demand"
+idle_timeout_sec = 300
+restart_policy = "on-failure"

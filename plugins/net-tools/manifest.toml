@@ -1,0 +1,70 @@
+[plugin]
+id = "com.intools.net-tools"
+name = "网络工具"
+version = "1.0.0"
+author = "InTools"
+description = "Ping、DNS 查询、端口检测、HTTP 请求、本机 IP 获取"
+
+[exec]
+command = "python"
+args = ["-u", "main.py"]
+
+[[tools]]
+name = "net:ping"
+description = "Ping 指定主机"
+[tools.input_schema]
+type = "object"
+required = ["host"]
+[tools.input_schema.properties.host]
+type = "string"
+description = "主机名或 IP"
+
+[[tools]]
+name = "net:dns"
+description = "查询域名的 DNS 记录"
+[tools.input_schema]
+type = "object"
+required = ["domain"]
+[tools.input_schema.properties.domain]
+type = "string"
+description = "要查询的域名"
+
+[[tools]]
+name = "net:check-port"
+description = "检测指定主机的端口是否开放"
+[tools.input_schema]
+type = "object"
+required = ["host", "port"]
+[tools.input_schema.properties.host]
+type = "string"
+description = "主机名或 IP"
+[tools.input_schema.properties.port]
+type = "integer"
+description = "端口号"
+
+[[tools]]
+name = "net:http"
+description = "发送 HTTP GET 请求"
+[tools.input_schema]
+type = "object"
+required = ["url"]
+[tools.input_schema.properties.url]
+type = "string"
+description = "请求 URL"
+
+[[tools]]
+name = "net:ip"
+description = "获取本机 IP 地址信息"
+[tools.input_schema]
+type = "object"
+
+[capabilities]
+permissions = ["network:http", "network:dns", "network:socket"]
+
+[docs]
+usage_file = "README.md"
+
+[lifecycle]
+mode = "on-demand"
+idle_timeout_sec = 300
+restart_policy = "on-failure"

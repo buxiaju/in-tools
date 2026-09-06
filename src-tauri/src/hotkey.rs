@@ -200,6 +200,22 @@ pub(crate) fn dispatch(
         return;
     }
 
+    if ui == Some("color-picker") {
+        match show_color_picker_overlay(handle, tool) {
+            Ok(()) => tracing::info!(tool = %tool, "已打开取色器覆盖层"),
+            Err(err) => tracing::warn!(tool = %tool, error = %err, "打开取色器覆盖层失败"),
+        }
+        return;
+    }
+
+    if ui == Some("clipboard-history") {
+        match show_clipboard_history_overlay(handle) {
+            Ok(()) => tracing::info!("已打开剪贴板历史覆盖层"),
+            Err(err) => tracing::warn!(error = %err, "打开剪贴板历史覆盖层失败"),
+        }
+        return;
+    }
+
     if let Some(other) = ui {
         // manifest 校验只保证 `ui` 是个字符串，不保证宿主认得。认不出来时降级为
         // 直接调用而不是罢工：插件的核心功能仍可用，只是少了交互界面。
@@ -246,6 +262,59 @@ fn show_region_select_overlay(
         .fullscreen(true)
         .always_on_top(true)
         .transparent(true)
+        .skip_taskbar(true)
+        .build()?;
+
+    Ok(())
+}
+
+/// 创建全屏透明覆盖层，供取色器跟随鼠标显示颜色信息。
+///
+/// 与框选覆盖层共用同一个窗口标签（`overlay`），但通过 URL 的 `mode` 参数
+/// 让前端 JS 走不同的交互分支。取色器模式下，JS 监听鼠标移动并调用
+/// `get_pixel_color` 命令实时取色，点击锁定后调用插件工具完成复制等后续动作。
+fn show_color_picker_overlay(
+    handle: &AppHandle,
+    tool: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(existing) = handle.get_webview_window("overlay") {
+        let _ = existing.close();
+    }
+
+    let url = format!(
+        "overlay.html?mode=color-picker&tool={}",
+        tool.replace(':', "%3A")
+    );
+    let _overlay = WebviewWindowBuilder::new(handle, "overlay", WebviewUrl::App(url.into()))
+        .title("屏幕取色")
+        .decorations(false)
+        .fullscreen(true)
+        .always_on_top(true)
+        .transparent(true)
+        .skip_taskbar(true)
+        .build()?;
+
+    Ok(())
+}
+
+/// 创建剪贴板历史浮窗。
+///
+/// 无窗口装饰的浮层，居中显示。用户点击条目后 JS 调用
+/// `copy_clipboard_entry` 命令回填剪贴板，然后自行关闭窗口。
+fn show_clipboard_history_overlay(
+    handle: &AppHandle,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(existing) = handle.get_webview_window("overlay") {
+        let _ = existing.close();
+    }
+
+    let url = "overlay.html?mode=clipboard-history";
+    let _overlay = WebviewWindowBuilder::new(handle, "overlay", WebviewUrl::App(url.into()))
+        .inner_size(400.0, 500.0)
+        .resizable(false)
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
         .skip_taskbar(true)
         .build()?;
 

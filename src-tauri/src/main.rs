@@ -11,6 +11,7 @@
 // 实测把依赖 tauri 的模块加进 lib 后，`cargo test --lib` 产出的测试二进制会在
 // 进程启动阶段就以 0xC0000139（ENTRYPOINT_NOT_FOUND）失败，连纯内核测试一起拖垮；
 // 而 `cargo test --bins` 正常。因此 Tauri 适配层一律放在 bin 侧。
+mod clipboard;
 mod commands;
 mod gateway;
 mod hotkey;
@@ -106,7 +107,12 @@ fn main() {
             commands::set_plugin_shortcut,
             commands::list_shortcut_bindings,
             commands::get_plugin_docs,
+            commands::get_plugin_dev_doc,
             commands::list_mcp_audit,
+            commands::get_pixel_color,
+            commands::get_clipboard_history,
+            commands::copy_clipboard_entry,
+            commands::close_overlay,
         ])
         .setup(move |app| {
             // `AppHandle` 只在这里才存在，而 `PermissionChecker` 在它之前就得造好，
@@ -141,6 +147,10 @@ fn main() {
 
             // 系统托盘：关窗口不退出，常驻后台。
             setup_tray(app, &startup_supervisor)?;
+
+            // 剪贴板历史监控：后台轮询系统剪贴板变化。
+            clipboard::init();
+            clipboard::start_monitoring();
 
             // 窗口关闭按钮 → 按配置决定隐藏到托盘还是真退出。
             //
@@ -327,7 +337,10 @@ fn assemble(config: &HostConfig) -> Result<Assembled, Box<dyn std::error::Error>
     // 全新安装时 `~/.intools/plugins` 并不存在，而扫描器对此是静默返回空列表的，
     // 结果就是「装完打开什么都没有」。播种失败不该拦住启动：大不了回到空列表，
     // 用户仍可自己往目录里放插件。
+    //
+    // 播种目标改为 `plugins/system/`：系统插件与用户插件隔离存放。
     match seed::seed_builtin_plugins(&plugins_root) {
+
         Ok(seed::SeedOutcome::Seeded { plugins }) => {
             tracing::info!(
                 plugins,
@@ -349,7 +362,9 @@ fn assemble(config: &HostConfig) -> Result<Assembled, Box<dyn std::error::Error>
 
     // 插件目录扫不动（不存在、无权限）不该让宿主起不来：退化成空注册表后，
     // 用户仍能进设置页改目录，比直接崩掉可用得多。
-    let registry = match Registry::scan_and_build(&plugins_root) {
+    //
+    // 扫描三个分类目录：system → test → user。同 id 冲突时先到先得（system 优先）。
+    let registry = match Registry::scan_and_build_categorized(&plugins_root) {
         Ok(registry) => registry,
         Err(err) => {
             tracing::warn!(

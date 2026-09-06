@@ -57,6 +57,9 @@ pub struct Manifest {
     /// 可选的说明文档声明。声明后宿主在插件卡片上显示「说明」按钮。
     #[serde(default)]
     pub docs: Option<Docs>,
+    /// 工具结果的结构化展示声明。
+    #[serde(default)]
+    pub result_display: Vec<ResultDisplay>,
 }
 
 impl Manifest {
@@ -173,6 +176,18 @@ impl Manifest {
             if f.contains('/') || f.contains('\\') || f == "." || f == ".." || f.contains("..") {
                 return Err(ManifestError::Validation(format!(
                     "docs.usage_file `{f}` 必须是插件目录下的纯文件名（不允许路径分隔符或 ..）"
+                )));
+            }
+        }
+
+        // 9. result_display 校验
+        let tool_names: std::collections::HashSet<&str> =
+            self.tools.iter().map(|t| t.name.as_str()).collect();
+        for rd in &self.result_display {
+            if !tool_names.contains(rd.tool.as_str()) {
+                return Err(ManifestError::Validation(format!(
+                    "result_display.tool '{}' 未匹配任何已声明的工具",
+                    rd.tool
                 )));
             }
         }
@@ -340,6 +355,12 @@ pub enum SettingType {
     Boolean,
     /// 下拉选择框，须提供 `options`。
     Select,
+    /// 颜色选择器，前端渲染为 color input。
+    Color,
+    /// 文件路径选择，前端渲染为带浏览按钮的文本框。
+    Path,
+    /// 密码输入，前端渲染为遮罩文本框。
+    Password,
 }
 
 /// 插件可配置参数的字段描述。
@@ -376,9 +397,307 @@ pub struct SettingField {
     /// 当 `field_type = Select` 时的可选项列表。
     #[serde(default)]
     pub options: Vec<String>,
+    /// 字段分组标题。相同 group 的字段会归入同一个视觉区域。
+    #[serde(default)]
+    pub group: Option<String>,
+    /// 字段下方的说明文字。
+    #[serde(default)]
+    pub description: Option<String>,
+    /// 输入框占位提示。
+    #[serde(default)]
+    pub placeholder: Option<String>,
+    /// number 类型的最小值。
+    #[serde(default)]
+    pub min: Option<f64>,
+    /// number 类型的最大值。
+    #[serde(default)]
+    pub max: Option<f64>,
+    /// number 类型的步长。
+    #[serde(default)]
+    pub step: Option<f64>,
+}
+
+// ─────────────────── 结果展示 ───────────────────
+
+/// 工具结果的结构化展示声明。
+///
+/// 插件在 manifest 中声明工具结果的展示方式，宿主据此将 JSON 结果渲染为
+/// 可读的 UI 组件，而非原始 JSON 文本。声明写在 `[[result_display]]` 段。
+///
+/// ```toml
+/// [[result_display]]
+/// tool = "color:pick"
+/// type = "kv"
+/// fields = [
+///   { key = "hex", label = "HEX" },
+///   { key = "rgb_string", label = "RGB" },
+/// ]
+/// ```
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ResultDisplay {
+    /// 绑定的工具名，须与 `[[tools]]` 中的某个 name 匹配。
+    pub tool: String,
+    /// 展示类型。
+    #[serde(rename = "type")]
+    pub display_type: ResultDisplayType,
+    /// kv 模式：要展示的字段列表。
+    #[serde(default)]
+    pub fields: Vec<ResultField>,
+    /// table 模式：列定义。
+    #[serde(default)]
+    pub columns: Vec<ResultColumn>,
+    /// markdown 模式：指定包含 markdown 文本的字段名。
+    #[serde(default)]
+    pub content_key: Option<String>,
+    /// 所有模式通用：结果根对象中包含状态信息的字段名。
+    #[serde(default)]
+    pub status_key: Option<String>,
+}
+
+/// 结果展示类型。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ResultDisplayType {
+    /// 键值对展示，每个 field 显示为一行 label: value。
+    Kv,
+    /// 表格展示，适合列表数据。
+    Table,
+    /// Markdown 文本渲染。
+    Markdown,
+    /// 原始 JSON 展示（降级）。
+    Raw,
+}
+
+/// kv 模式下的字段声明。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ResultField {
+    /// JSON 结果中的键名。
+    pub key: String,
+    /// 人类可读标签。
+    pub label: String,
+}
+
+/// table 模式下的列声明。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ResultColumn {
+    /// JSON 结果数组元素中的键名。
+    pub key: String,
+    /// 列标题。
+    pub label: String,
 }
 
 // ─────────────────── 权限 ───────────────────
+
+/// 权限的「方面」——把系统的所有面分成 16 个桶，每个桶下的 [`PermissionAction`]
+/// 是该面允许的具体动作。新增类别只在这两个枚举里加，不动其他代码。
+///
+/// 字符串映射规则是单一来源：`as_str()` / `parse_str()`。所以「`process:spawn`
+/// 在新类别表里实际叫什么」靠这两个方法与 `PermissionCategory::parse_str` 锁死，
+/// 改动一处即知全部影响面。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PermissionCategory {
+    /// 文件系统读写
+    File,
+    /// 网络访问（HTTP / WebSocket / DNS / 原始 socket）
+    Network,
+    /// 起新进程
+    Process,
+    /// 执行 shell 命令（与 `process:spawn` 不同——后者是裸起二进制，
+    /// 这里专指通过 cmd / PowerShell / bash 间接执行）
+    Shell,
+    /// 屏幕截图 / 录屏
+    Screen,
+    /// 模拟键鼠输入
+    Input,
+    /// 读写剪贴板
+    Clipboard,
+    /// 麦克风采集 / 扬声器播放
+    Audio,
+    /// 系统级操作（关机 / 重启 / 注销 / 锁屏）
+    System,
+    /// 操纵其他窗口（最小化 / 关闭 / 置顶 / 移动）
+    Window,
+    /// 启动其他桌面应用（带 GUI 的可执行文件）
+    App,
+    /// Windows 注册表读写
+    Registry,
+    /// 读取 / 修改凭据存储
+    Credential,
+    /// 访问密钥 / 证书（系统或用户级）
+    Crypto,
+    /// 发送系统通知
+    Notification,
+    /// 摄像头 / 蓝牙 / 串口等通用硬件访问
+    Hardware,
+    /// 安装 / 卸载 / 自启动等持久化行为
+    Persistence,
+    /// 计划任务 / cron 表达式注册
+    Schedule,
+    /// 读取 / 修改进程环境变量
+    Environment,
+}
+
+impl PermissionCategory {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::File => "file",
+            Self::Network => "network",
+            Self::Process => "process",
+            Self::Shell => "shell",
+            Self::Screen => "screen",
+            Self::Input => "input",
+            Self::Clipboard => "clipboard",
+            Self::Audio => "audio",
+            Self::System => "system",
+            Self::Window => "window",
+            Self::App => "app",
+            Self::Registry => "registry",
+            Self::Credential => "credential",
+            Self::Crypto => "crypto",
+            Self::Notification => "notification",
+            Self::Hardware => "hardware",
+            Self::Persistence => "persistence",
+            Self::Schedule => "schedule",
+            Self::Environment => "environment",
+        }
+    }
+
+    pub fn parse_str(s: &str) -> Option<Self> {
+        Some(match s {
+            "file" => Self::File,
+            "network" => Self::Network,
+            "process" => Self::Process,
+            "shell" => Self::Shell,
+            "screen" => Self::Screen,
+            "input" => Self::Input,
+            "clipboard" => Self::Clipboard,
+            "audio" => Self::Audio,
+            "system" => Self::System,
+            "window" => Self::Window,
+            "app" => Self::App,
+            "registry" => Self::Registry,
+            "credential" => Self::Credential,
+            "crypto" => Self::Crypto,
+            "notification" => Self::Notification,
+            "hardware" => Self::Hardware,
+            "persistence" => Self::Persistence,
+            "schedule" => Self::Schedule,
+            "environment" => Self::Environment,
+            _ => return None,
+        })
+    }
+
+    /// 人类可读的中文名。前端授权弹窗里用它显示「权限面」。
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::File => "文件",
+            Self::Network => "网络",
+            Self::Process => "进程",
+            Self::Shell => "Shell",
+            Self::Screen => "屏幕",
+            Self::Input => "输入",
+            Self::Clipboard => "剪贴板",
+            Self::Audio => "音频",
+            Self::System => "系统",
+            Self::Window => "窗口",
+            Self::App => "应用",
+            Self::Registry => "注册表",
+            Self::Credential => "凭据",
+            Self::Crypto => "密钥",
+            Self::Notification => "通知",
+            Self::Hardware => "硬件",
+            Self::Persistence => "持久化",
+            Self::Schedule => "计划任务",
+            Self::Environment => "环境变量",
+        }
+    }
+}
+
+/// 在某一「方面」下能做的具体动作。
+///
+/// 新增动作先评估两件事：
+/// 1. 它属于哪个 [`PermissionCategory`]？
+/// 2. 它的危险度是多少？见 [`PermissionAction::default_danger`]。
+///
+/// 「网络」类别下有一组具体的协议动作（[`PermissionAction::Http`] /
+/// [`PermissionAction::WebSocket`] / [`PermissionAction::Dns`] /
+/// [`PermissionAction::Socket`]），它们与通用动作 [`PermissionAction::Send`] /
+/// [`PermissionAction::Receive`] 二选一：要么用通用动作表达「能收发字节」，
+/// 要么用具体协议表达「按 HTTP / WebSocket 等协议访问」。同时声明两条等价，
+/// 校验层会拒掉冗余声明（见 [`validate_pair`]）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PermissionAction {
+    Read,
+    Write,
+    Capture,
+    Record,
+    Control,
+    Spawn,
+    Exec,
+    Send,
+    Receive,
+    Manage,
+    Modify,
+    Install,
+    Uninstall,
+    /// `network:http` —— HTTP/HTTPS 请求
+    Http,
+    /// `network:websocket` —— WebSocket 全双工
+    WebSocket,
+    /// `network:dns` —— DNS 查询
+    Dns,
+    /// `network:socket` —— 原始 TCP / UDP socket
+    Socket,
+}
+
+impl PermissionAction {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Read => "read",
+            Self::Write => "write",
+            Self::Capture => "capture",
+            Self::Record => "record",
+            Self::Control => "control",
+            Self::Spawn => "spawn",
+            Self::Exec => "exec",
+            Self::Send => "send",
+            Self::Receive => "receive",
+            Self::Manage => "manage",
+            Self::Modify => "modify",
+            Self::Install => "install",
+            Self::Uninstall => "uninstall",
+            Self::Http => "http",
+            Self::WebSocket => "websocket",
+            Self::Dns => "dns",
+            Self::Socket => "socket",
+        }
+    }
+
+    pub fn parse_str(s: &str) -> Option<Self> {
+        Some(match s {
+            "read" => Self::Read,
+            "write" => Self::Write,
+            "capture" => Self::Capture,
+            "record" => Self::Record,
+            "control" => Self::Control,
+            "spawn" => Self::Spawn,
+            "exec" => Self::Exec,
+            "send" => Self::Send,
+            "receive" => Self::Receive,
+            "manage" => Self::Manage,
+            "modify" => Self::Modify,
+            "install" => Self::Install,
+            "uninstall" => Self::Uninstall,
+            "http" => Self::Http,
+            "websocket" => Self::WebSocket,
+            "dns" => Self::Dns,
+            "socket" => Self::Socket,
+            _ => return None,
+        })
+    }
+}
 
 /// 单个权限声明，形如 `screen:capture`、`file:read`、`file:read:/foo`。
 ///
@@ -386,6 +705,11 @@ pub struct SettingField {
 /// - `file:read`（分类 `file`，动作 `read`，无范围）
 /// - `file:read:~/Pictures`（分类 `file`，动作 `read`，范围 `~/Pictures`）
 /// - `process:spawn`（高危，无范围）
+///
+/// 解析时会校验 `category` 与 `action` 是否在 [`PermissionCategory`] / [`PermissionAction`]
+/// 的枚举表内——未知类别一律拒绝，避免「写下 `xyz:read` 也能通过校验」
+/// 这种开口。范围 `scope` 是自由字符串（路径、域名、`*`），但具体含义
+/// 留给插件自己的运行时去解释。
 ///
 /// 按分类 + 动作映射到三级危险度，见 [`Permission::danger_level`]。
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -419,40 +743,233 @@ impl Permission {
                 "权限 `{s}` 格式非法，要求 `category:action[:scope]`"
             ));
         }
+        // 类别 + 动作必须在白名单内。`PermissionCategory::parse_str` 返回 `None`
+        // 时附带一行「已知类别有……」提示，比「unknown category」这种半截报错更有用。
+        let category = PermissionCategory::parse_str(cat).ok_or_else(|| {
+            format!(
+                "权限 `{s}` 的类别 `{cat}` 不在白名单（已知类别：{}）",
+                known_categories()
+            )
+        })?;
+        let action = PermissionAction::parse_str(act).ok_or_else(|| {
+            format!(
+                "权限 `{s}` 的动作 `{act}` 不在白名单（已知动作：{}）",
+                known_actions()
+            )
+        })?;
+        // 类别与动作的合理性自检（拒掉「`clipboard:spawn`」这种荒诞组合），
+        // 避免以后误打一个字符串就能通过校验。
+        if let Err(msg) = validate_pair(category, action) {
+            return Err(format!("权限 `{s}` 组合不合法：{msg}"));
+        }
         Ok(Permission {
-            category: cat.to_string(),
-            action: act.to_string(),
+            category: category.as_str().to_string(),
+            action: action.as_str().to_string(),
             scope: scope.map(|s| s.to_string()),
         })
     }
 
     /// 按设计文档 §7 的三级危险度分类。
     ///
-    /// 规则：
-    /// - **高危**：`input:control`（模拟键鼠）、`process:spawn`（起新进程）、
-    ///   `file:write:*`（任意路径写，即 action 为 `write` 且 scope 为 `*`）。
-    /// - **中危**：`screen:capture`、`clipboard:write`、`file:write`（非 `*` 范围）、
-    ///   `clipboard:read`。
-    /// - **低危**：其余（如 `file:read`、`network:http`）。
-    /// - 由于权限模型为插件级粗粒度，单个高危权限即会让整个插件在 MCP 层被拦截。
+    /// 规则集中在一处（[`PermissionAction::default_danger`] + `scope_elevates`
+    /// 提升规则），新增类别时**只**改那张表 + `validate_pair` 这两处即可，
+    /// 不用动本函数。
     pub fn danger_level(&self) -> DangerLevel {
-        match (
-            self.category.as_str(),
-            self.action.as_str(),
-            self.scope.as_deref(),
-        ) {
-            ("input", "control", _) => DangerLevel::High,
-            ("process", "spawn", _) => DangerLevel::High,
-            ("file", "write", Some("*")) => DangerLevel::High,
-
-            ("screen", "capture", _) => DangerLevel::Medium,
-            ("clipboard", "write", _) => DangerLevel::Medium,
-            ("clipboard", "read", _) => DangerLevel::Medium,
-            ("file", "write", _) => DangerLevel::Medium,
-
-            _ => DangerLevel::Low,
+        let Some(category) = PermissionCategory::parse_str(&self.category) else {
+            // 未知类别按低危处理——`parse` 已经把这条路径堵死，
+            // 这里是兜底（譬如从老配置文件手动 JSON 注入的脏数据）。
+            return DangerLevel::Low;
+        };
+        let Some(action) = PermissionAction::parse_str(&self.action) else {
+            return DangerLevel::Low;
+        };
+        let base = action.default_danger();
+        let elevated_by_scope = scope_elevates(category, action, self.scope.as_deref());
+        let elevated_by_read = matches!(action, PermissionAction::Read)
+            && read_danger_elevates(category);
+        if elevated_by_scope || elevated_by_read {
+            base.elevate()
+        } else {
+            base
         }
     }
+}
+
+impl DangerLevel {
+    /// 危险度向上提一级。`High` 已是顶，不再变。
+    fn elevate(self) -> Self {
+        match self {
+            Self::Low => Self::Medium,
+            Self::Medium | Self::High => Self::High,
+        }
+    }
+}
+
+impl PermissionAction {
+    /// 该动作在「无范围限定」时的默认危险度。新增动作时这是必填项。
+    ///
+    /// 评分原则：
+    /// - Low：可观察到的副作用能被用户撤回、或只在用户主动发起的场景出现。
+    /// - Medium：能改用户能看到的东西（屏幕、剪贴板、文件、窗口），
+    ///   但范围有限（不覆盖整个机器）。
+    /// - High：能接管机器行为本身（执行、起进程、改系统状态、捕获输入）。
+    pub fn default_danger(self) -> DangerLevel {
+        match self {
+            Self::Read => DangerLevel::Low,
+            Self::Receive => DangerLevel::Low,
+            Self::Send => DangerLevel::Low,
+            Self::Http => DangerLevel::Low,
+            Self::WebSocket => DangerLevel::Low,
+            Self::Dns => DangerLevel::Low,
+
+            Self::Write => DangerLevel::Medium,
+            Self::Capture => DangerLevel::Medium,
+            Self::Record => DangerLevel::Medium,
+            Self::Modify => DangerLevel::Medium,
+            Self::Manage => DangerLevel::Medium,
+
+            Self::Control => DangerLevel::High,
+            Self::Spawn => DangerLevel::High,
+            Self::Exec => DangerLevel::High,
+            Self::Install => DangerLevel::High,
+            Self::Uninstall => DangerLevel::High,
+            // 裸 TCP/UDP socket 等同任意网络目标——提一档让用户看到。
+            Self::Socket => DangerLevel::High,
+        }
+    }
+}
+
+/// 「读」类动作的细调：哪些 `Read` 因为泄漏后果严重而需要升档。
+///
+/// 集中一处维护，避免散在 `danger_level` 默认值里加 if 分支——每加一条
+/// 都要在这写明「为什么」，而不是埋进表达式。
+pub fn read_danger_elevates(category: PermissionCategory) -> bool {
+    use PermissionCategory::*;
+    // 剪贴板：可能含密码 / 2FA / 私钥片段。
+    // 凭据 / 密钥：本身就是敏感凭据。
+    matches!(category, Clipboard | Credential | Crypto | Registry)
+}
+
+/// scope 把动作的危险度往上一级推。
+///
+/// 「`file:write:/foo`」是用户指定的目录——危险度 Medium 已经合适；
+/// 「`file:write:*`」覆盖任意目录——这一条必须升级到 High，否则用户
+/// 看到一个 Low / Medium 的「写文件」就放行了，实际上能写整个磁盘。
+///
+/// 网络协议动作的 `*` 升档机制不同：默认 Low 的 `Http` / `WebSocket` / `Dns`
+/// 在「任意主机」时升到 Medium（值得弹窗），但不必到 High——HTTP / DNS 是
+/// 良性协议，与 `Shell:exec` 任意命令不同。高危动作（`Socket`、`Spawn`、`Exec`）
+/// 的 `*` 直接升到 High。
+fn scope_elevates(category: PermissionCategory, action: PermissionAction, scope: Option<&str>) -> bool {
+    if scope != Some("*") {
+        return false;
+    }
+    use PermissionAction::*;
+    use PermissionCategory::*;
+    match (category, action) {
+        // 文件读写覆盖任意路径——升到 High。
+        (File, Write | Read) => true,
+        // 起任意进程 / 任意 shell 命令——High。
+        (Process, Spawn) | (Shell, Exec) => true,
+        // 任意主机的网络协议值得升档（Low → Medium），让用户看一眼。
+        // - 裸 socket 默认就是 High（等同任意网络目标），不再加这层升档。
+        (Network, Http | WebSocket | Dns) => true,
+        (Network, Socket) => true,
+        _ => false,
+    }
+}
+
+/// 校验「类别 + 动作」的组合是否说得通。拒掉 `clipboard:spawn` 这类荒诞对。
+///
+/// 判定原则：每个类别只允许它「能合理承担」的动作。`PermissionAction` 是
+/// 跨类别共享的动作词表，所以必须在这里显式约束。
+fn validate_pair(
+    category: PermissionCategory,
+    action: PermissionAction,
+) -> Result<(), &'static str> {
+    use PermissionAction::*;
+    use PermissionCategory::*;
+    let ok = match (category, action) {
+        (File, Read | Write) => true,
+        (Network, Read | Write | Send | Receive | Http | WebSocket | Dns | Socket) => true,
+        (Process, Spawn) => true,
+        (Shell, Exec) => true,
+        (Screen, Capture | Record) => true,
+        (Input, Control) => true,
+        (Clipboard, Read | Write) => true,
+        (Audio, Capture | Record | Send | Receive) => true,
+        (System, Manage) => true,
+        (Window, Manage | Modify) => true,
+        (App, Spawn) => true,
+        (Registry, Read | Write | Modify) => true,
+        (Credential, Read | Write) => true,
+        (Crypto, Read | Write) => true,
+        (Notification, Send) => true,
+        (Hardware, Read | Write | Control) => true,
+        (Persistence, Install | Uninstall | Modify) => true,
+        (Schedule, Manage) => true,
+        (Environment, Read | Write) => true,
+        _ => false,
+    };
+    if ok {
+        Ok(())
+    } else {
+        Err("类别与动作的搭配不在白名单内")
+    }
+}
+
+fn known_categories() -> String {
+    let all: Vec<&str> = [
+        PermissionCategory::File,
+        PermissionCategory::Network,
+        PermissionCategory::Process,
+        PermissionCategory::Shell,
+        PermissionCategory::Screen,
+        PermissionCategory::Input,
+        PermissionCategory::Clipboard,
+        PermissionCategory::Audio,
+        PermissionCategory::System,
+        PermissionCategory::Window,
+        PermissionCategory::App,
+        PermissionCategory::Registry,
+        PermissionCategory::Credential,
+        PermissionCategory::Crypto,
+        PermissionCategory::Notification,
+        PermissionCategory::Hardware,
+        PermissionCategory::Persistence,
+        PermissionCategory::Schedule,
+        PermissionCategory::Environment,
+    ]
+    .iter()
+    .map(|c| c.as_str())
+    .collect();
+    all.join(", ")
+}
+
+fn known_actions() -> String {
+    let all: Vec<&str> = [
+        PermissionAction::Read,
+        PermissionAction::Write,
+        PermissionAction::Capture,
+        PermissionAction::Record,
+        PermissionAction::Control,
+        PermissionAction::Spawn,
+        PermissionAction::Exec,
+        PermissionAction::Send,
+        PermissionAction::Receive,
+        PermissionAction::Manage,
+        PermissionAction::Modify,
+        PermissionAction::Install,
+        PermissionAction::Uninstall,
+        PermissionAction::Http,
+        PermissionAction::WebSocket,
+        PermissionAction::Dns,
+        PermissionAction::Socket,
+    ]
+    .iter()
+    .map(|a| a.as_str())
+    .collect();
+    all.join(", ")
 }
 
 impl std::fmt::Display for Permission {
@@ -1180,6 +1697,136 @@ mode = "lazy"  # 不存在
             Permission::parse("network:http").unwrap().danger_level(),
             DangerLevel::Low
         );
+    }
+
+    /// 拒绝未知类别。`Permission::parse` 必须把 `xyz:read` 这种字符串挡掉，
+    /// 否则下游危险度映射会把它当 Low 默默放行——「写下任何字符串就能过校验」
+    /// 是权限模型最严重的开口。
+    #[test]
+    fn permission_unknown_category_rejected() {
+        let err = Permission::parse("xyz:read").unwrap_err();
+        assert!(err.contains("xyz"), "错误信息应包含未知类别：{err}");
+        assert!(err.contains("已知类别"), "应提示已知类别：{err}");
+    }
+
+    /// 拒绝未知动作。同上原因，单纯 `file:fly` 应当被拒。
+    #[test]
+    fn permission_unknown_action_rejected() {
+        let err = Permission::parse("file:fly").unwrap_err();
+        assert!(err.contains("fly"), "错误信息应包含未知动作：{err}");
+        assert!(err.contains("已知动作"), "应提示已知动作：{err}");
+    }
+
+    /// 类别与动作的组合不合理（譬如 `clipboard:spawn`）应当被拒。
+    /// `PermissionAction` 是跨类别共享的词表，必须显式约束。
+    #[test]
+    fn permission_invalid_pair_rejected() {
+        // 剪贴板没有 spawn 这种动作
+        let err = Permission::parse("clipboard:spawn").unwrap_err();
+        assert!(err.contains("组合不合法"), "应说明组合不合法：{err}");
+        // 屏幕不可能 modify
+        let err2 = Permission::parse("screen:install").unwrap_err();
+        assert!(err2.contains("组合不合法"), "应说明组合不合法：{err2}");
+    }
+
+    /// 「scope = `*`」把权限升档——典型场景：任意文件写、任意网络目标。
+    /// 这一条规则覆盖的是「**默认允许的子集**也是全集」的最危险情形。
+    #[test]
+    fn permission_scope_star_elevates_danger() {
+        assert_eq!(
+            Permission::parse("file:write:*").unwrap().danger_level(),
+            DangerLevel::High
+        );
+        // 没 scope 的同类权限保持中危。
+        assert_eq!(
+            Permission::parse("file:write:~/Documents").unwrap().danger_level(),
+            DangerLevel::Medium
+        );
+        // 网络目标的 `*` 升档：任意主机。HTTP 默认 Low，`*` 提到 Medium 即可——
+        // 已是合法协议，不必升到 High。
+        assert_eq!(
+            Permission::parse("network:http:*").unwrap().danger_level(),
+            DangerLevel::Medium
+        );
+        // 指定域名不升档。
+        assert_eq!(
+            Permission::parse("network:http:api.example.com")
+                .unwrap()
+                .danger_level(),
+            DangerLevel::Low
+        );
+    }
+
+    /// 「读」类动作在某些类别下需要升档，因为内容可能含敏感数据。
+    /// 例如剪贴板读、凭据读、注册表读。
+    #[test]
+    fn permission_read_in_sensitive_category_elevates() {
+        assert_eq!(
+            Permission::parse("clipboard:read").unwrap().danger_level(),
+            DangerLevel::Medium
+        );
+        assert_eq!(
+            Permission::parse("credential:read").unwrap().danger_level(),
+            DangerLevel::Medium
+        );
+        assert_eq!(
+            Permission::parse("crypto:read").unwrap().danger_level(),
+            DangerLevel::Medium
+        );
+        // 普通读仍然是低危。
+        assert_eq!(
+            Permission::parse("file:read:~/Documents")
+                .unwrap()
+                .danger_level(),
+            DangerLevel::Low
+        );
+    }
+
+    /// 网络协议动作各自有合理默认危险度。`Socket` 因等同任意网络目标而 High。
+    #[test]
+    fn permission_network_protocol_danger() {
+        assert_eq!(
+            Permission::parse("network:http").unwrap().danger_level(),
+            DangerLevel::Low
+        );
+        assert_eq!(
+            Permission::parse("network:websocket").unwrap().danger_level(),
+            DangerLevel::Low
+        );
+        assert_eq!(
+            Permission::parse("network:socket").unwrap().danger_level(),
+            DangerLevel::High
+        );
+    }
+
+    /// 每个新类别至少有一个常见的合理组合应当被接受，覆盖「全类别可达」语义。
+    /// 漏掉任何一类都会让插件作者无法声明该权限，进而违反「覆盖各个方面」。
+    #[test]
+    fn permission_all_categories_have_one_valid_pair() {
+        let cases = [
+            "file:read",
+            "network:http",
+            "process:spawn",
+            "shell:exec",
+            "screen:capture",
+            "input:control",
+            "clipboard:write",
+            "audio:capture",
+            "system:manage",
+            "window:manage",
+            "app:spawn",
+            "registry:read",
+            "credential:read",
+            "crypto:read",
+            "notification:send",
+            "hardware:read",
+            "persistence:install",
+            "schedule:manage",
+            "environment:read",
+        ];
+        for c in cases {
+            Permission::parse(c).unwrap_or_else(|e| panic!("`{c}` 应当可解析：{e}"));
+        }
     }
 
     #[test]

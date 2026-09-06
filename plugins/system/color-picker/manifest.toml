@@ -1,0 +1,50 @@
+[plugin]
+id = "com.intools.colorpicker"
+name = "屏幕取色器"
+version = "0.1.0"
+author = "InTools"
+description = "获取鼠标当前位置的屏幕像素颜色，返回 HEX / RGB / HSL 格式"
+
+[exec]
+command = "python"
+args = ["-u", "main.py"]
+
+[[tools]]
+name = "color:pick"
+description = "获取鼠标当前所在位置的屏幕像素颜色，返回 HEX、RGB、HSL 及坐标。使用前请将鼠标移到目标颜色上"
+[tools.input_schema]
+type = "object"
+[tools.input_schema.properties.copy_to_clipboard]
+type = "boolean"
+description = "是否将 HEX 颜色值复制到剪贴板，默认 true"
+
+[[tools]]
+name = "color:at"
+description = "获取屏幕上指定坐标处的像素颜色，返回 HEX、RGB、HSL"
+[tools.input_schema]
+type = "object"
+required = ["x", "y"]
+[tools.input_schema.properties.x]
+type = "integer"
+description = "屏幕物理像素 X 坐标"
+minimum = 0
+[tools.input_schema.properties.y]
+type = "integer"
+description = "屏幕物理像素 Y 坐标"
+minimum = 0
+
+[capabilities]
+permissions = ["screen:capture", "clipboard:write"]
+
+[shortcut]
+key = "Ctrl+Alt+C"
+tool = "color:pick"
+ui = "color-picker"
+
+[docs]
+usage_file = "README.md"
+
+[lifecycle]
+mode = "on-demand"
+idle_timeout_sec = 120
+restart_policy = "on-failure"

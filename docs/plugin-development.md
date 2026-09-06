@@ -1,8 +1,10 @@
 # InTools 插件开发手册
 
+> 适用版本：InTools v0.4.0 · 宿主协议版本 1.0
+
 InTools 插件是一个独立子进程，通过 stdin/stdout 与宿主交换 JSON-RPC 2.0 消息。用什么语言写都行，只要能读写标准输入输出。
 
-本手册覆盖：清单字段、四种插件形态、通信协议、快捷键、插件界面、配置存储、说明文档、打包分发与调试。
+本手册覆盖：清单字段、四种插件形态、通信协议、快捷键、插件界面、配置存储、说明文档、MCP 集成、打包分发与调试。
 
 ---
 
@@ -99,19 +101,51 @@ plugins/my-plugin/
 
 ### 权限表
 
-| 权限 | 等级 | 说明 |
-| --- | --- | --- |
-| `file:read` | 低危 | 读取文件 |
-| `file:write` | 中危 | 写入文件 |
-| `file:write:*` | 高危 | 写入任意路径 |
-| `screen:capture` | 中危 | 屏幕截图 |
-| `clipboard:read` | 中危 | 读取剪贴板 |
-| `clipboard:write` | 中危 | 写入剪贴板 |
-| `network:http` | 低危 | HTTP 网络请求 |
-| `input:control` | 高危 | 模拟键鼠输入 |
-| `process:spawn` | 高危 | 启动子进程 |
+格式：`category:action[:scope]`。`category` 与 `action` 必须是下表里的合法组合，否则
+manifest 解析时报错并拒收。`scope` 是自由字符串，常见值有具体路径
+（`file:read:~/Pictures`）、域名（`network:http:api.example.com`）或通配（`*`）。
 
-低危声明即生效；中危首次使用时问用户；高危每会话首次使用时都问。
+**类别**（19 个面，每个面只能配下表列出的动作）：
+
+| 类别 | 可用动作 | 说明 |
+| --- | --- | --- |
+| `file` | `read` / `write` | 文件系统读写 |
+| `network` | `http` / `websocket` / `dns` / `socket` / `read` / `write` / `send` / `receive` | 网络访问 |
+| `process` | `spawn` | 启动子进程 |
+| `shell` | `exec` | 通过 cmd / PowerShell / bash 执行命令 |
+| `screen` | `capture` / `record` | 屏幕截图与录屏 |
+| `input` | `control` | 模拟键鼠输入 |
+| `clipboard` | `read` / `write` | 读写剪贴板 |
+| `audio` | `capture` / `record` / `send` / `receive` | 麦克风与扬声器 |
+| `system` | `manage` | 关机 / 重启 / 注销 / 锁屏 |
+| `window` | `manage` / `modify` | 操纵其他窗口（最小化 / 关闭 / 置顶 / 移动） |
+| `app` | `spawn` | 启动其他桌面应用 |
+| `registry` | `read` / `write` / `modify` | Windows 注册表读写 |
+| `credential` | `read` / `write` | 凭据存储访问 |
+| `crypto` | `read` / `write` | 密钥 / 证书访问 |
+| `notification` | `send` | 发送系统通知 |
+| `hardware` | `read` / `write` / `control` | 摄像头 / 蓝牙 / 串口等通用硬件 |
+| `persistence` | `install` / `uninstall` / `modify` | 安装 / 卸载 / 自启动等持久化行为 |
+| `schedule` | `manage` | 计划任务 / cron 表达式注册 |
+| `environment` | `read` / `write` | 进程环境变量 |
+
+**危险度规则**：
+
+- **高危**（每会话首次使用时都问）：`input:control`、`process:spawn`、`shell:exec`、
+  `app:spawn`、`persistence:install/uninstall`、`hardware:control`、`audio:record`、
+  `network:socket`、以及「`*`」升档后的 `file:write:*` / `file:read:*` /
+  `process:spawn:*` / `shell:exec:*`。
+- **中危**（首次使用时问）：`file:write`、`screen:capture/record`、`clipboard:read/write`、
+  `audio:capture`、`window:manage/modify`、`registry:read/write/modify`、
+  `credential:read/write`、`crypto:read/write`、`persistence:modify`、`hardware:read/write`、
+  `environment:write`、以及「`*`」升档后的 `network:http:*` / `network:websocket:*` /
+  `network:dns:*`。
+- **低危**（声明即生效）：`file:read`、`network:http/websocket/dns`、
+  `notification:send`、`environment:read` 等。
+
+低危声明即生效；中危与高危首次使用时问用户，高危每次会话再问一次。
+「`file:write:*`」「`network:http:*`」这类「scope = `*`」会把基础危险度提一档——
+任意主机 / 任意路径是「默认允许的子集 = 全集」的最危险情形。
 
 **按最小需要声明。** 多声明一个高危权限，用户就多一次弹窗、多一分犹豫。用户的授权决定存在 `~/.intools/permissions.json`，被拒过的可以在权限页删掉记录重新询问。
 
@@ -136,7 +170,7 @@ ui = "region-select"      # 可选：先弹交互界面
 | --- | --- | --- |
 | `key` | 否 | 默认键位。**允许为空串**，表示「支持热键但不预设按键」，等用户自己绑 |
 | `tool` | 是 | 必须是本插件 `[[tools]]` 里声明过的工具名，否则清单校验直接失败 |
-| `ui` | 否 | 交互界面类型，目前只支持 `"region-select"` |
+| `ui` | 否 | 交互界面类型。支持三种：`"region-select"`（框选区域）、`"color-picker"`（屏幕取色）、`"clipboard-history"`（剪贴板历史面板） |
 
 ### 键位格式
 
@@ -242,9 +276,15 @@ options = ["png", "jpg"]
 | --- | --- | --- |
 | `key` | 是 | 字段名，非空且在本插件内唯一。它会成为工具参数里的键名 |
 | `label` | 是 | 表单上显示的文字，非空 |
-| `type` | 是 | `string` / `number` / `boolean` / `select` |
+| `type` | 是 | `string` / `number` / `boolean` / `select` / `color` / `path` / `password` |
 | `default` | 否 | 默认值 |
 | `options` | select 必填 | 下拉选项，非空数组 |
+| `group` | 否 | string | 字段分组标题，相同 group 的字段归入同一视觉区域 |
+| `description` | 否 | string | 字段下方的说明文字 |
+| `placeholder` | 否 | string | 输入框占位提示文本 |
+| `min` | 否 | float | number 类型的最小值 |
+| `max` | 否 | float | number 类型的最大值 |
+| `step` | 否 | float | number 类型的步长 |
 
 ### 设置值是怎么到你手上的
 
@@ -492,6 +532,126 @@ if __name__ == "__main__":
 
 ---
 
+## 十-b、Node.js 骨架
+
+InTools 自带 Node.js SDK（`plugins/node-sdk/intools.js`），封装了协议握手、消息编解码、工具路由、反向 RPC、进度通知，插件只关注业务逻辑。
+
+```js
+// manifest.toml: command = "node", args = ["main.js"]
+const { Plugin } = require("../node-sdk/intools");
+
+const plugin = new Plugin("1.0");
+
+plugin.tool(
+  "my:echo",                     // 工具名
+  "原样返回文本",                 // 描述
+  {                               // JSON Schema
+    type: "object",
+    required: ["text"],
+    properties: { text: { type: "string" } },
+  },
+  (args) => ({ text: args.text }) // 处理函数，可返回 Promise
+);
+
+plugin.start();
+```
+
+SDK 自动处理 `plugin/hello` 握手、`plugin/ready` 确认、`plugin/shutdown` 退出、`tools/list` 与 `tools/call` 路由。工具函数抛出 `PluginError` 即返回错误响应，其他异常自动转为 `-32603 INTERNAL`。
+
+```js
+const { Plugin, PluginError, ErrorCode } = require("../node-sdk/intools");
+// ...
+if (!args.path) throw new PluginError(ErrorCode.INVALID_PARAMS, "path 缺失");
+```
+
+### 反向 RPC
+
+handler 的第二个参数是 `ctx`（`ToolContext`），提供跨插件调用能力：
+
+```js
+plugin.tool("my:task", "调用其他插件", { ... }, async (args, ctx) => {
+  // 列出所有可用工具
+  const tools = await ctx.listTools();
+
+  // 调用其他插件的工具
+  const ocrResult = await ctx.callTool("ocr:recognize", { image_path: args.path });
+
+  // 读写本插件私有配置
+  const config = await ctx.getConfig();
+  await ctx.setConfig({ last_run: Date.now() });
+
+  return { ocr: ocrResult };
+});
+```
+
+### 进度通知
+
+```js
+plugin.tool("my:long", "耗时任务", { ... }, async (args, ctx) => {
+  ctx.progress({ percent: 0, message: "开始" });
+  // ...
+  ctx.progress({ percent: 50, message: "处理中" });
+  // ...
+  ctx.progress({ percent: 100, message: "完成" });
+
+  // 流式文本
+  ctx.stream("第一段文本");
+  ctx.stream("第二段文本");
+});
+```
+
+完整示例见 `plugins/system-info/`（基础用法）和 `plugins/workflow-runner/`（反向 RPC + 进度通知）。
+
+---
+
+## 十一-c、Go / 编译型语言骨架
+
+编译型语言不需要 SDK——协议是逐行 JSON，用标准库的 `bufio.Scanner` + `encoding/json` 二十行就能读写。
+
+```go
+// manifest.toml: command = "my-tool.exe"
+func main() {
+    // 握手：主动发 plugin/hello
+    notify("plugin/hello", map[string]interface{}{
+        "protocol_version": "1.0",
+        "tools":            tools,
+    })
+
+    scanner := bufio.NewScanner(os.Stdin)
+    for scanner.Scan() {
+        var msg jsonrpcMsg
+        json.Unmarshal([]byte(scanner.Text()), &msg)
+        // msg.ID != nil && msg.Method != "" → 请求
+        // 路由到 tools/call、plugin/shutdown 等
+    }
+}
+```
+
+编译后的 `.exe` 直接放在插件目录，manifest 里 `command = "my-tool.exe"`，无需解释器。
+
+**一次遍历多份哈希**等 CPU 密集型任务，Go 比 Python/Node 快数倍，是编译型插件的典型场景。完整示例见 `plugins/file-hash/`。
+
+---
+
+## 十一-d、其他语言
+
+协议只依赖 stdin/stdout JSON，任何能读写管道的语言都可以做插件：
+
+| 语言 | stdin 读取 | stdout 写入 | 启动命令 |
+|------|-----------|------------|---------|
+| Python | `for line in sys.stdin` | `print(json.dumps(...))` | `python -u main.py` |
+| Node.js | `readline` 或 SDK | `process.stdout.write(...)` | `node main.js` |
+| Go | `bufio.Scanner` | `fmt.Println` | `my-plugin.exe` |
+| Rust | `std::io::stdin` | `serde_json::to_writer` | `my-plugin.exe` |
+| C# | `Console.ReadLine()` | `Console.WriteLine()` | `dotnet run` |
+| Java | `BufferedReader(System.in)` | `System.out.println` | `java -jar plugin.jar` |
+| Ruby | `STDIN.each_line` | `puts JSON.generate(...)` | `ruby main.rb` |
+| Shell | `while read line` | `echo '{"jsonrpc":...}'` | `bash main.sh` |
+
+**唯一约束**：stdout 只能输出协议帧（一行一条 JSON），调试日志必须走 stderr。任何语言都能满足这个条件。
+
+---
+
 ## 十二、运行时目录
 
 所有用户数据在 `~/.intools/`：
@@ -604,15 +764,183 @@ print("result:", json.loads(proc.stdout.readline()))
 
 ## 十五、示范插件
 
-仓库 `plugins/` 下六个插件，按学习顺序：
+仓库 `plugins/` 下的插件，按学习顺序：
 
 | 插件 | 演示内容 |
 | --- | --- |
 | `hello-plugin` | 最小握手、工具调用、崩溃处理。**没有快捷键、界面、设置项**，示范三者皆可省 |
 | `file-search` | 实用工具、标准库实现、跨平台路径处理 |
+| `clipboard-tool` | 多工具声明（读/写/追加/清空/检测）、`clipboard:read` / `clipboard:write` 权限 |
 | `screenshot-plugin` | `[shortcut]` + `ui = "region-select"` + `[[settings]]` + `[docs]`，功能最全 |
+| `color-picker` | 快捷键 + 自定义 UI 类型（`color-picker`）、屏幕取色 + 剪贴板联动 |
+| `ocr-tool` | `[shortcut]` + `ui = "region-select"` + `[[settings]]`、Windows OCR API 调用 |
+| `window-info` | Win32 API 调用、多工具（活动窗口/列表/搜索）、无权限声明 |
 | `ai-orchestrator` | 反向 RPC 编排、`startup` 常驻、`host/*Config` 私有存储 |
 | `caller-plugin` | 反向 RPC 各分支、递归调用深度上限（集成测试桩） |
 | `responder-plugin` | 权限拦截验证（集成测试桩） |
+| `ui-demo` | 插件 UI 声明系统演示：分组表单、增强设置类型（color/path/password）、kv/table/markdown 结果展示 |
 
 想照着改一个能用的，从 `file-search` 开始；想做带快捷键和界面的，直接读 `screenshot-plugin`。
+
+---
+
+## 十六、插件 UI 声明
+
+宿主提供声明式 UI 系统，插件在 manifest.toml 中描述界面，宿主负责渲染。
+这让你用任何语言写的插件都能拥有统一的、美观的用户界面。
+
+### 设置字段增强
+
+除原有的 `string` / `number` / `boolean` / `select` 外，现在支持更多类型：
+
+| 类型 | 渲染控件 | 典型用途 |
+| --- | --- | --- |
+| `string` | 文本框 | 通用文本输入 |
+| `number` | 数字框 | 数值参数（支持 min/max/step） |
+| `boolean` | 开关 | 功能开关 |
+| `select` | 下拉框 | 枚举选项 |
+| `color` | 颜色选择器 | 主题色、标记色 |
+| `path` | 路径输入框 | 文件/目录路径 |
+| `password` | 密码框 | API Key、Token |
+
+#### 分组与描述
+
+字段可以按 `group` 分组，并附带 `description` 说明文字：
+
+```toml
+[[settings]]
+key = "api_key"
+label = "API Key"
+type = "password"
+group = "API 配置"
+description = "在服务商后台获取，格式为 sk-..."
+
+[[settings]]
+key = "model"
+label = "模型"
+type = "select"
+default = "deepseek-chat"
+options = ["deepseek-chat", "deepseek-coder"]
+group = "API 配置"
+description = "选择使用的 AI 模型"
+
+[[settings]]
+key = "output_dir"
+label = "输出目录"
+type = "path"
+default = "~/output"
+group = "输出设置"
+placeholder = "选择文件保存位置"
+```
+
+同一 `group` 值的字段会归入同一个视觉区域，带分组标题。
+
+### 工具结果展示
+
+插件可以声明工具结果的结构化展示方式，宿主将 JSON 结果渲染为可读的 UI 组件：
+
+```toml
+[[result_display]]
+tool = "my:status"
+type = "kv"
+fields = [
+  { key = "version", label = "版本" },
+  { key = "uptime", label = "运行时间" },
+  { key = "memory", label = "内存使用" },
+]
+```
+
+支持三种展示类型：
+
+| 类型 | 说明 | 适用场景 |
+| --- | --- | --- |
+| `kv` | 键值对展示 | 状态信息、配置摘要 |
+| `table` | 表格展示 | 列表数据、查询结果 |
+| `markdown` | Markdown 渲染 | 富文本报告、说明文档 |
+
+另有 `raw` 类型作为降级选项，直接展示原始 JSON 文本。
+
+所有展示类型通用可选字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `status_key` | 结果根对象中包含状态信息的字段名，宿主据此显示状态指示 |
+
+#### kv 示例
+
+```toml
+[[result_display]]
+tool = "color:pick"
+type = "kv"
+fields = [
+  { key = "hex", label = "HEX" },
+  { key = "rgb_string", label = "RGB" },
+  { key = "hsl_string", label = "HSL" },
+]
+```
+
+#### table 示例
+
+```toml
+[[result_display]]
+tool = "search:files"
+type = "table"
+columns = [
+  { key = "name", label = "文件名" },
+  { key = "path", label = "路径" },
+  { key = "size", label = "大小" },
+]
+```
+
+#### markdown 示例
+
+```toml
+[[result_display]]
+tool = "report:generate"
+type = "markdown"
+content_key = "report"
+status_key = "status"
+```
+
+### 运行时 UI 更新
+
+插件可以通过通知机制发送结构化 UI 更新：
+
+```python
+# 插件发送 kv 结果展示
+notify("ui/display", {
+    "type": "kv",
+    "fields": [
+        {"key": "status", "label": "状态"},
+        {"key": "progress", "label": "进度"},
+    ],
+    "data": {"status": "运行中", "progress": "75%"}
+})
+```
+
+这对于长时运行任务的进度展示特别有用。
+
+---
+
+## 十七、MCP 集成
+
+InTools 内置 MCP（Model Context Protocol）网关，启用后其他 MCP 客户端（如 Claude Desktop、Cursor）可以通过 HTTP 调用你插件的工具。
+
+### 工具暴露
+
+默认所有工具**不暴露**给外部 MCP 客户端。用户在权限页手动勾选要暴露的工具，选择结果存入 `~/.intools/mcp-exposure.json`。
+
+工具名暴露时会自动转换：`:` → `_`，如 `search:files` 变成 `search_files`。**插件内部始终收到原始名**，不需要处理这个转换。
+
+### 网关配置
+
+在设置页开启 MCP 网关，宿主会：
+1. 生成一个 Bearer Token（首次开启时自动生成）
+2. 在本地启动 HTTP 端点
+3. 其他 MCP 客户端配置该地址即可调用已暴露的工具
+
+### 对插件的影响
+
+MCP 集成对插件完全透明——工具调用走的是同一条 `tools/call` 路径。插件不需要做任何适配。
+
+唯一要注意的是：**工具描述写清楚**。MCP 客户端（尤其是 AI）靠 `description` 决定要不要调你的工具，描述含糊会导致工具被忽略或误调。

@@ -94,9 +94,13 @@ pub struct PluginView {
     pub has_shortcut: bool,
     /// 是否有设置项（manifest 有 `[[settings]]`）。
     pub has_settings: bool,
-    /// 是否被用户禁用。禁用 = 持久化 + 不响应按需唤醒 + 不出现在工具列表。
+    /// 是否已启用（未被用户禁用）。禁用 = 持久化 + 不响应按需唤醒 + 不出现在工具列表。
     /// 跟运行状态（`state`）正交：禁用插件的 `state` 仍是 `stopped`。
     pub enabled: bool,
+    /// 工具结果展示声明，供前端按 schema 渲染结构化结果。
+    pub result_display: Vec<intools::protocol::manifest::ResultDisplay>,
+    /// 插件分类：system / test / user。
+    pub category: String,
 }
 
 /// 工具列表项，供对话页做工具选择与手动调用。
@@ -281,7 +285,9 @@ pub async fn list_plugins(state: State<'_, AppState>) -> CmdResult<Vec<PluginVie
             has_docs: manifest.docs.is_some(),
             has_shortcut: manifest.shortcut.is_some(),
             has_settings: !manifest.settings.is_empty(),
-            enabled: supervisor.is_disabled(&id),
+            enabled: !supervisor.is_disabled(&id),
+            result_display: manifest.result_display.clone(),
+            category: plugin.category.as_str().to_string(),
         });
     }
 
@@ -400,17 +406,25 @@ pub async fn import_plugin_package(zip_bytes: Vec<u8>) -> CmdResult<ImportResult
         .map_err(|e| e.to_string())?
         .effective_plugins_dir()
         .map_err(|e| e.to_string())?;
+    // 用户导入的插件放到 user/ 子目录
+    let user_dir = plugins_root.join("user");
 
     let outcome = tauri::async_runtime::spawn_blocking(move || {
         // 扫描失败（目录不存在）不该拦住导入：那正是「一个插件都没装」的情形，
-        // 空 id 列表即可。
-        let existing_ids: Vec<String> = discovery::scan_plugins_root(&plugins_root)
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|entry| entry.ok().map(|p| p.manifest.plugin.id))
-            .collect();
+        // 空 id 列表即可。扫描全部三个分类目录以检查 id 冲突。
+        let mut existing_ids = Vec::new();
+        for subdir in &["system", "test", "user"] {
+            let dir = plugins_root.join(subdir);
+            if let Ok(entries) = discovery::scan_plugins_root(&dir) {
+                for entry in entries {
+                    if let Ok(p) = entry {
+                        existing_ids.push(p.manifest.plugin.id);
+                    }
+                }
+            }
+        }
 
-        import::import_from_bytes(&plugins_root, &zip_bytes, &existing_ids)
+        import::import_from_bytes(&user_dir, &zip_bytes, &existing_ids)
     })
     .await
     .map_err(|e| format!("导入任务未能完成：{e}"))?
@@ -435,10 +449,12 @@ pub async fn reload_plugins(state: State<'_, AppState>) -> CmdResult<ReloadResul
         .effective_plugins_dir()
         .map_err(|e| e.to_string())?;
 
-    let next = tauri::async_runtime::spawn_blocking(move || Registry::scan_and_build(&plugins_root))
-        .await
-        .map_err(|e| format!("重载任务未能完成：{e}"))?
-        .map_err(|e| e.to_string())?;
+    let next = tauri::async_runtime::spawn_blocking(move || {
+        Registry::scan_and_build_categorized(&plugins_root)
+    })
+    .await
+    .map_err(|e| format!("重载任务未能完成：{e}"))?
+    .map_err(|e| e.to_string())?;
 
     let diff = state.supervisor.replace_registry(next).await;
 
@@ -865,8 +881,22 @@ pub struct SettingFieldView {
     pub key: String,
     pub label: String,
     pub field_type: String,
-    pub default: JsonValue,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default: Option<JsonValue>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub options: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub placeholder: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub step: Option<f64>,
 }
 
 /// 获取插件的设置 schema + 当前值。
@@ -900,9 +930,18 @@ pub async fn get_plugin_settings(
                         SettingType::Number => "number".into(),
                         SettingType::Boolean => "boolean".into(),
                         SettingType::Select => "select".into(),
+                        SettingType::Color => "color".into(),
+                        SettingType::Path => "path".into(),
+                        SettingType::Password => "password".into(),
                     },
-                    default: sf.default.clone(),
+                    default: if sf.default.is_null() { None } else { Some(sf.default.clone()) },
                     options: sf.options.clone(),
+                    group: sf.group.clone(),
+                    description: sf.description.clone(),
+                    placeholder: sf.placeholder.clone(),
+                    min: sf.min,
+                    max: sf.max,
+                    step: sf.step,
                 })
                 .collect()
         })
@@ -1167,6 +1206,17 @@ pub async fn get_plugin_docs(
     })
 }
 
+/// 读取随安装包分发的插件开发手册（Markdown）。
+///
+/// 文件路径固定：`docs/plugin-development.md`，由 `tauri.conf.json` 的
+/// `bundle.resources` 整体拷贝到可执行文件旁。文档改了只需重打包，
+/// 不需要改代码。
+#[tauri::command]
+pub async fn get_plugin_dev_doc() -> CmdResult<String> {
+    let path = paths::bundled_doc("plugin-development.md").map_err(|e| e.to_string())?;
+    std::fs::read_to_string(&path).map_err(|e| format!("读取 `{}` 失败：{e}", path.display()))
+}
+
 // ─────────────────── MCP 审计 ───────────────────
 
 /// 列出最近的 MCP 审计记录，最新的排前面。
@@ -1275,6 +1325,74 @@ pub async fn set_ai_config(
         api_key,
         model,
     })
+}
+
+// ─────────────────── 屏幕取色 ───────────────────
+
+/// 取色器面板用的像素颜色 DTO。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PixelColorView {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub hex: String,
+}
+
+/// 获取屏幕指定坐标处的像素颜色，供取色器覆盖层实时调用。
+///
+/// 坐标是物理像素（覆盖层已乘过 devicePixelRatio）。走 Windows GDI 的
+/// GetDC/GetPixel，不启动插件进程，延迟在亚毫秒级——鼠标移动时高频调用
+/// 也不会卡。非 Windows 平台返回错误。
+#[cfg(windows)]
+#[tauri::command]
+pub fn get_pixel_color(x: i32, y: i32) -> CmdResult<PixelColorView> {
+    use windows_sys::Win32::Graphics::Gdi::{GetDC, GetPixel, ReleaseDC};
+
+    let hdc = unsafe { GetDC(std::ptr::null_mut()) };
+    if hdc.is_null() {
+        return Err("GetDC 失败".to_string());
+    }
+    // COLORREF 是 0x00BBGGRR，GetPixel 失败时返回 CLR_INVALID (0xFFFFFFFF)。
+    let color = unsafe { GetPixel(hdc, x, y) };
+    unsafe { ReleaseDC(std::ptr::null_mut(), hdc) };
+
+    if color == 0xFFFFFFFF {
+        return Err("GetPixel 失败（坐标可能超出屏幕范围）".to_string());
+    }
+
+    let r = (color & 0xFF) as u8;
+    let g = ((color >> 8) & 0xFF) as u8;
+    let b = ((color >> 16) & 0xFF) as u8;
+    let hex = format!("#{:02X}{:02X}{:02X}", r, g, b);
+
+    Ok(PixelColorView { r, g, b, hex })
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+pub fn get_pixel_color(_x: i32, _y: i32) -> CmdResult<PixelColorView> {
+    Err("屏幕取色仅支持 Windows".to_string())
+}
+
+// ─── 剪贴板历史 ───
+
+#[tauri::command]
+pub fn get_clipboard_history() -> CmdResult<Vec<crate::clipboard::ClipboardEntry>> {
+    Ok(crate::clipboard::get_history())
+}
+
+#[tauri::command]
+pub fn copy_clipboard_entry(text: String) -> CmdResult<()> {
+    crate::clipboard::copy_entry_to_clipboard(&text)
+}
+
+#[tauri::command]
+pub fn close_overlay(app: tauri::AppHandle) -> CmdResult<()> {
+    use tauri::Manager;
+    if let Some(w) = app.get_webview_window("overlay") {
+        w.close().map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

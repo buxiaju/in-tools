@@ -1,0 +1,60 @@
+[plugin]
+id = "com.intools.plugin-builder"
+name = "插件生成器"
+version = "1.0.0"
+author = "InTools"
+description = "在 AI 对话中一句话生成完整插件：描述需求，自动生成 manifest + 代码 + 文档"
+
+[exec]
+command = "python"
+args = ["-u", "main.py"]
+
+[[tools]]
+name = "plugin:generate"
+description = "根据描述生成完整插件项目（manifest.toml + 入口文件 + README.md）"
+[tools.input_schema]
+type = "object"
+required = ["name", "description", "tools"]
+[tools.input_schema.properties.name]
+type = "string"
+description = "插件名称（英文小写连字符，如 weather-query）"
+[tools.input_schema.properties.description]
+type = "string"
+description = "插件的中文描述"
+[tools.input_schema.properties.language]
+type = "string"
+description = "编程语言：python（默认）、node、go"
+[tools.input_schema.properties.tools]
+type = "array"
+description = "工具列表，每个工具需提供 name、description、params"
+[tools.input_schema.properties.permissions]
+type = "array"
+description = "所需权限列表，如 ['network:http']"
+
+[[tools]]
+name = "plugin:list-templates"
+description = "列出可用的插件语言模板及其特点"
+[tools.input_schema]
+type = "object"
+
+[capabilities]
+permissions = []
+
+[[result_display]]
+tool = "plugin:generate"
+type = "kv"
+fields = [
+  { key = "plugin_name", label = "插件名" },
+  { key = "plugin_id", label = "插件 ID" },
+  { key = "language", label = "语言" },
+  { key = "tools_count", label = "工具数" },
+  { key = "directory", label = "生成目录" },
+]
+
+[docs]
+usage_file = "README.md"
+
+[lifecycle]
+mode = "on-demand"
+idle_timeout_sec = 300
+restart_policy = "on-failure"

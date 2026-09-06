@@ -1,6 +1,6 @@
 [package]
 name = "intools"
-version = "0.1.0"
+version = "0.4.0"
 description = "InTools 插件宿主"
 authors = ["InTools"]
 edition = "2021"
@@ -56,4 +56,4 @@ tempfile = "3.27.0"
 tokio = { version = "1.53.1", features = ["test-util"] }
 
 [target."cfg(windows)".dependencies]
-windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_JobObjects"] }
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_JobObjects", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging"] }

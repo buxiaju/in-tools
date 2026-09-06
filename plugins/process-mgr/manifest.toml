@@ -1,0 +1,57 @@
+[plugin]
+id = "com.intools.process-mgr"
+name = "进程管理"
+version = "1.0.0"
+author = "InTools"
+description = "列出/搜索/终止进程，启动程序，执行 shell 命令"
+
+[exec]
+command = "python"
+args = ["-u", "main.py"]
+
+[[tools]]
+name = "proc:list"
+description = "列出当前运行的进程"
+[tools.input_schema]
+type = "object"
+
+[[tools]]
+name = "proc:kill"
+description = "终止指定进程"
+[tools.input_schema]
+type = "object"
+required = ["pid"]
+[tools.input_schema.properties.pid]
+type = "integer"
+description = "进程 ID"
+
+[[tools]]
+name = "proc:start"
+description = "启动程序或打开文件/文件夹/网址"
+[tools.input_schema]
+type = "object"
+required = ["target"]
+[tools.input_schema.properties.target]
+type = "string"
+description = "程序路径、文件路径、文件夹或网址"
+
+[[tools]]
+name = "proc:exec"
+description = "执行 shell 命令并返回输出"
+[tools.input_schema]
+type = "object"
+required = ["command"]
+[tools.input_schema.properties.command]
+type = "string"
+description = "要执行的命令"
+
+[capabilities]
+permissions = ["process:spawn", "shell:exec"]
+
+[docs]
+usage_file = "README.md"
+
+[lifecycle]
+mode = "on-demand"
+idle_timeout_sec = 300
+restart_policy = "on-failure"

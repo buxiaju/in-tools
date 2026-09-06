@@ -1,0 +1,51 @@
+[plugin]
+id = "com.intools.app-launcher"
+name = "应用启动器"
+version = "1.0.0"
+author = "InTools"
+description = "打开文件、文件夹、网址，搜索已安装应用，在资源管理器中定位文件"
+
+[exec]
+command = "python"
+args = ["-u", "main.py"]
+
+[[tools]]
+name = "app:open"
+description = "打开文件、文件夹或网址"
+[tools.input_schema]
+type = "object"
+required = ["target"]
+[tools.input_schema.properties.target]
+type = "string"
+description = "文件路径、文件夹路径或网址"
+
+[[tools]]
+name = "app:search"
+description = "搜索已安装的应用程序"
+[tools.input_schema]
+type = "object"
+required = ["keyword"]
+[tools.input_schema.properties.keyword]
+type = "string"
+description = "应用名称关键词"
+
+[[tools]]
+name = "app:explorer"
+description = "在文件资源管理器中打开并选中指定文件"
+[tools.input_schema]
+type = "object"
+required = ["path"]
+[tools.input_schema.properties.path]
+type = "string"
+description = "文件或文件夹路径"
+
+[capabilities]
+permissions = ["file:read", "app:spawn"]
+
+[docs]
+usage_file = "README.md"
+
+[lifecycle]
+mode = "on-demand"
+idle_timeout_sec = 300
+restart_policy = "on-failure"

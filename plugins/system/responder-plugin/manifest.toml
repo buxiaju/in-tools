@@ -1,0 +1,28 @@
+[plugin]
+id = "com.intools.responder"
+name = "Responder 测试插件"
+version = "0.1.0"
+author = "InTools"
+description = "反向 RPC 集成测试的响应方：声明 screen:capture 权限，用于验证权限拦截"
+
+[exec]
+command = "python"
+args = ["-u", "main.py"]
+
+[[tools]]
+name = "responder:echo"
+description = "原样返回传入文本，与 hello:echo 功能相同但声明了 screen:capture 权限"
+[tools.input_schema]
+type = "object"
+required = ["text"]
+[tools.input_schema.properties.text]
+type = "string"
+description = "要回显的文本"
+
+[capabilities]
+permissions = ["screen:capture"]
+
+[lifecycle]
+mode = "on-demand"
+idle_timeout_sec = 300
+restart_policy = "on-failure"

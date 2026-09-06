@@ -5,12 +5,15 @@ InTools is a desktop tool host program based on a plugin mechanism. It aggregate
 ## Core Features
 
 - **Plugin Architecture**: Any executable program or script (e.g., Python, Node.js, binary) can be connected as a plugin.
-- **Unified Communication Protocol**: Inter-process communication based on JSON-RPC ensures interactions between plugins and the host are clear and predictable.
-- **Permission Model**: Fine-grained permission control. Plugins must declare required permissions, and users can choose to grant or deny them.
+- **Unified Communication Protocol**: Inter-process communication based on JSON-RPC 2.0 ensures interactions between plugins and the host are clear and predictable.
+- **Permission Model**: Fine-grained permission control across 19 categories. Plugins must declare required permissions, and users can choose to grant or deny them.
 - **Global Shortcuts**: Supports configuring global hotkeys for plugins, which can be triggered even without window focus.
 - **AI Orchestration Integration**: Built-in AI orchestration plugin that can call LLM APIs to combine multiple tools.
-- **MCP Gateway**: Provides an MCP (Machine Control Protocol) compatible interface callable by other MCP clients.
-- **Cross-platform Support**: Built on Tauri, supporting Windows, macOS, and Linux.
+- **Plugin Import**: Import third-party plugins from zip packages directly into InTools.
+- **MCP Gateway**: When enabled, provides an HTTP endpoint for other MCP clients to interact with InTools plugins.
+- **Clipboard History**: Background clipboard monitoring, press `Ctrl+Shift+V` to view history and quick-paste.
+- **Declarative UI**: Plugins declare UI via manifest, host renders uniformly with grouped forms and structured result display.
+- **Cross-platform Support**: Built on Tauri 2.11.5, supporting Windows, macOS, and Linux.
 
 ## Directory Structure
 
@@ -32,11 +35,13 @@ in-tools/
 │   └── tests/             # Integration tests
 ├── plugins/                # Sample plugins (Python)
 │   ├── ai-orchestrator/   # AI orchestration plugin
-│   ├── caller-plugin/     # Demo of inter-plugin calling
+│   ├── clipboard-tool/    # Clipboard access plugin
+│   ├── color-picker/      # Color picker plugin
 │   ├── file-search/       # File search tool
 │   ├── hello-plugin/      # Beginner sample plugin
-│   ├── responder-plugin/  # Reactive plugin
-│   └── screenshot-plugin/ # Screenshot tool
+│   ├── ocr-tool/          # OCR recognition plugin
+│   ├── screenshot-plugin/ # Screenshot tool
+│   └── window-info/       # Window information plugin
 ├── src/                   # Frontend resources
 │   ├── index.html         # Main interface
 │   ├── main.js           # Frontend logic
@@ -45,7 +50,6 @@ in-tools/
 ├── docs/                  # Documentation
 │   ├── plugin-development.md  # Plugin development guide
 │   └── superpowers/specs/     # Design documents
-└── tools/                 # Build tools (NSIS, etc.)
 ```
 
 ## Quick Start
@@ -64,9 +68,10 @@ cargo tauri build
 1. Start InTools; the taskbar icon displays the application status.
 2. Switch function views via the left navigation.
 3. Plugin View: Manage the enable/disable status of plugins.
-4. Tools View: View all available tools and invoke them directly.
+4. AI Chat: Interact with AI, which can automatically call plugin tools.
 5. Permissions View: Manage granted permissions.
-6. Settings View: Configure log levels, AI APIs, etc.
+6. Plugin Dev: View development documentation.
+7. Settings View: Configure log levels, AI APIs, close behavior, MCP gateway toggle, etc.
 
 ## Plugin Development
 
@@ -107,7 +112,7 @@ description = "Quick greeting"
 
 ### Protocol Communication
 
-Plugins communicate with the host via JSON-RPC over standard input/output (stdin/stdout):
+Plugins communicate with the host via JSON-RPC 2.0 over standard input/output (stdin/stdout):
 
 ```python
 import sys
@@ -132,25 +137,30 @@ For detailed protocol specifications, please refer to the [Plugin Development Ma
 - **file-search**: File search tool, demonstrating parameter handling and path security.
 - **screenshot-plugin**: Screenshot capture, demonstrating system-level API calls.
 - **ai-orchestrator**: AI orchestration, demonstrating multi-tool combination and LLM calls.
+- **window-info**: Window information retrieval.
+- **ocr-tool**: OCR recognition for extracting text from images.
+- **clipboard-tool**: Clipboard read/write access.
+- **color-picker**: Screen color picking.
 
 ## Configuration
 
 ### Main Config
 
-`~/.config/in-tools/config.json`:
+`~/.intools/host-config.json`:
 
 ```json
 {
-    "plugins_dir": "~/.local/share/in-tools/plugins",
+    "plugins_dir": null,
     "log_level": "info",
     "close_behavior": "minimize",
-    "mcp_enabled": false
+    "mcp_enabled": false,
+    "mcp_token": ""
 }
 ```
 
 ### Shortcut Config
 
-`~/.config/in-tools/shortcuts.json`:
+`~/.intools/shortcuts.json`:
 
 ```json
 {
@@ -163,15 +173,29 @@ For detailed protocol specifications, please refer to the [Plugin Development Ma
 
 ## Permission Model
 
-Plugins must declare required permissions in `manifest.toml`:
+Plugins must declare required permissions in `manifest.toml`. The host supports 19 permission categories:
 
-| Permission | Description | Risk Level |
-|-----|------|---------|
-| `file.read` | Read file system | Medium |
-| `file.write` | Write file system | High |
-| `process.spawn` | Spawn external processes | High |
-| `network` | Network access | High |
-| `ui.show` | Display windows | Low |
+| Category | Actions | Description |
+|---|---|---|
+| file | read / write | File system access |
+| network | http / websocket / dns / socket / read / write / send / receive | Network access |
+| process | spawn | Spawn child processes |
+| shell | exec | Execute shell commands |
+| screen | capture / record | Screen capture and recording |
+| input | control | Simulate keyboard and mouse input |
+| clipboard | read / write | Read/write clipboard |
+| audio | capture / record / send / receive | Microphone and speakers |
+| system | manage | Shutdown / restart / logout / lock screen |
+| window | manage / modify | Manipulate other windows |
+| app | spawn | Launch desktop applications |
+| registry | read / write / modify | Windows registry access |
+| credential | read / write | Credential store access |
+| crypto | read / write | Key / certificate access |
+| notification | send | Send system notifications |
+| hardware | read / write / control | Camera / Bluetooth / serial port etc. |
+| persistence | install / uninstall / modify | Install / uninstall / auto-start |
+| schedule | manage | Scheduled tasks / cron |
+| environment | read / write | Process environment variables |
 
 When using a plugin requiring high-risk permissions for the first time, users will receive a prompt and can choose:
 - **Allow**: Valid for this invocation only.
@@ -193,7 +217,7 @@ A: Use `print()` in the plugin's `main.py` to output logs to `stderr`, or manual
 
 ### Environment Dependencies
 
-- Rust 1.70+
+- Rust 1.88+
 - Python 3.8+ (for developing Python plugins)
 - Node.js (optional, for frontend resources)
 
@@ -213,7 +237,7 @@ cargo tauri dev
 
 ```bash
 cd src-tauri
-cargo test --workspace
+cargo test --lib
 ```
 
 ## Protocol & Compatibility

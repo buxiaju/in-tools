@@ -1,0 +1,63 @@
+[plugin]
+id = "com.intools.file-hash"
+name = "文件哈希"
+version = "1.0.0"
+author = "InTools"
+description = "计算文件 MD5/SHA1/SHA256 哈希值，用于文件校验与完整性检查（Go 编译型插件）"
+
+[exec]
+# 编译后的二进制即插即用，无需解释器。
+# 编译命令：go build -o file-hash.exe main.go
+command = "file-hash.exe"
+args = []
+
+[[tools]]
+name = "hash:file"
+description = "计算单个文件的 MD5/SHA1/SHA256 哈希值"
+[tools.input_schema]
+type = "object"
+required = ["path"]
+[tools.input_schema.properties.path]
+type = "string"
+description = "文件的绝对路径"
+
+[[tools]]
+name = "hash:dir"
+description = "递归计算目录下所有文件的 SHA256，用于目录内容校验"
+[tools.input_schema]
+type = "object"
+required = ["path"]
+[tools.input_schema.properties.path]
+type = "string"
+description = "目录的绝对路径"
+
+[capabilities]
+permissions = ["file:read"]
+
+[[result_display]]
+tool = "hash:file"
+type = "kv"
+fields = [
+  { key = "filename", label = "文件名" },
+  { key = "size", label = "大小(字节)" },
+  { key = "md5", label = "MD5" },
+  { key = "sha1", label = "SHA1" },
+  { key = "sha256", label = "SHA256" },
+]
+
+[[result_display]]
+tool = "hash:dir"
+type = "table"
+columns = [
+  { key = "path", label = "文件" },
+  { key = "size", label = "大小" },
+  { key = "sha256", label = "SHA256" },
+]
+
+[docs]
+usage_file = "README.md"
+
+[lifecycle]
+mode = "on-demand"
+idle_timeout_sec = 300
+restart_policy = "on-failure"

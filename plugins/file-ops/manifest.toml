@@ -1,0 +1,110 @@
+[plugin]
+id = "com.intools.file-ops"
+name = "文件操作"
+version = "1.0.0"
+author = "InTools"
+description = "文件系统基本操作：读取、写入、列目录、创建目录、删除、复制、移动、获取信息"
+
+[exec]
+command = "python"
+args = ["-u", "main.py"]
+
+[[tools]]
+name = "file:read"
+description = "读取文本文件内容"
+[tools.input_schema]
+type = "object"
+required = ["path"]
+[tools.input_schema.properties.path]
+type = "string"
+description = "文件路径"
+
+[[tools]]
+name = "file:write"
+description = "写入文本文件（覆盖或追加）"
+[tools.input_schema]
+type = "object"
+required = ["path", "content"]
+[tools.input_schema.properties.path]
+type = "string"
+description = "文件路径"
+[tools.input_schema.properties.content]
+type = "string"
+description = "要写入的内容"
+
+[[tools]]
+name = "file:list"
+description = "列出目录内容"
+[tools.input_schema]
+type = "object"
+required = ["path"]
+[tools.input_schema.properties.path]
+type = "string"
+description = "目录路径"
+
+[[tools]]
+name = "file:mkdir"
+description = "创建目录（含父目录）"
+[tools.input_schema]
+type = "object"
+required = ["path"]
+[tools.input_schema.properties.path]
+type = "string"
+description = "目录路径"
+
+[[tools]]
+name = "file:delete"
+description = "删除文件或目录"
+[tools.input_schema]
+type = "object"
+required = ["path"]
+[tools.input_schema.properties.path]
+type = "string"
+description = "要删除的路径"
+
+[[tools]]
+name = "file:copy"
+description = "复制文件或目录"
+[tools.input_schema]
+type = "object"
+required = ["src", "dst"]
+[tools.input_schema.properties.src]
+type = "string"
+description = "源路径"
+[tools.input_schema.properties.dst]
+type = "string"
+description = "目标路径"
+
+[[tools]]
+name = "file:move"
+description = "移动/重命名文件或目录"
+[tools.input_schema]
+type = "object"
+required = ["src", "dst"]
+[tools.input_schema.properties.src]
+type = "string"
+description = "源路径"
+[tools.input_schema.properties.dst]
+type = "string"
+description = "目标路径"
+
+[[tools]]
+name = "file:info"
+description = "获取文件或目录的详细信息"
+[tools.input_schema]
+type = "object"
+required = ["path"]
+[tools.input_schema.properties.path]
+type = "string"
+description = "文件或目录路径"
+
+[capabilities]
+permissions = ["file:read", "file:write"]
+
+[docs]
+usage_file = "README.md"
+
+[lifecycle]
+mode = "on-demand"
+idle_timeout_sec = 300
+restart_policy = "on-failure"

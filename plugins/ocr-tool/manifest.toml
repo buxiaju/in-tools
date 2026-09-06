@@ -1,0 +1,57 @@
+[plugin]
+id = "com.intools.ocr"
+name = "屏幕文字识别"
+version = "0.1.0"
+author = "InTools"
+description = "截取屏幕区域并使用 Windows 内置 OCR 引擎识别其中的文字"
+
+[exec]
+command = "python"
+args = ["-u", "main.py"]
+
+[[tools]]
+name = "ocr:recognize"
+description = "截取屏幕指定区域并识别其中的文字。使用快捷键时会先弹出区域框选界面"
+[tools.input_schema]
+type = "object"
+[tools.input_schema.properties.region]
+type = "object"
+description = "截图区域 {x, y, width, height}，不传则截取全屏"
+[tools.input_schema.properties.language]
+type = "string"
+description = "识别语言，如 zh-Hans、en。不传则使用系统默认语言"
+[tools.input_schema.properties.copy_to_clipboard]
+type = "boolean"
+description = "是否将识别结果复制到剪贴板，默认 true"
+[tools.input_schema.properties.save_image]
+type = "boolean"
+description = "是否保存截图文件，默认 false"
+
+[capabilities]
+permissions = ["screen:capture", "clipboard:write"]
+
+[shortcut]
+key = "Ctrl+Alt+O"
+tool = "ocr:recognize"
+ui = "region-select"
+
+[docs]
+usage_file = "README.md"
+
+[[settings]]
+key = "language"
+label = "识别语言"
+type = "select"
+default = "zh-Hans"
+options = ["zh-Hans", "zh-Hant", "en", "ja", "ko", ""]
+
+[[settings]]
+key = "copy_to_clipboard"
+label = "自动复制识别结果到剪贴板"
+type = "boolean"
+default = true
+
+[lifecycle]
+mode = "on-demand"
+idle_timeout_sec = 180
+restart_policy = "on-failure"

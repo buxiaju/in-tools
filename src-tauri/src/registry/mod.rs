@@ -15,6 +15,32 @@ pub mod discovery;
 pub mod import;
 pub mod seed;
 
+/// 插件分类：系统自带 / 测试用 / 用户安装。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PluginCategory {
+    /// 随安装包分发的系统插件（`plugins/system/`）。
+    System,
+    /// 测试插件（`plugins/test/`）。
+    Test,
+    /// 用户自行安装的插件（`plugins/user/`）。
+    User,
+}
+
+impl PluginCategory {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::System => "system",
+            Self::Test => "test",
+            Self::User => "user",
+        }
+    }
+
+    /// 对应的子目录名。
+    pub fn dir_name(&self) -> &'static str {
+        self.as_str()
+    }
+}
+
 /// 已成功加载、并且通过注册表"工具去重"规则的插件记录。
 #[derive(Debug, Clone)]
 pub struct RegisteredPlugin {
@@ -23,6 +49,8 @@ pub struct RegisteredPlugin {
     /// manifest 静态声明的工具清单。跨插件工具名冲突时，某些工具可能已被移除，
     /// 所以这里不再是 manifest 原样，而是经过"冲突清洗后"的最终版本。
     pub tools: Vec<ToolDescriptor>,
+    /// 插件分类：系统 / 测试 / 用户。
+    pub category: PluginCategory,
 }
 
 impl RegisteredPlugin {
@@ -69,10 +97,9 @@ impl Registry {
     ///   其余工具保留，写入反向索引。
     pub fn from_scan(entries: Vec<ScanEntry>) -> Self {
         let mut reg = Self::new();
-        // 按 discovery 已经给出的稳定顺序依次插入，先到先得。
         for entry in entries {
             match entry {
-                Ok(loaded) => reg.insert_loaded(loaded),
+                Ok(loaded) => reg.insert_loaded(loaded, PluginCategory::User),
                 Err(e) => reg.load_failures.push(e),
             }
         }
@@ -85,8 +112,37 @@ impl Registry {
         Ok(Self::from_scan(entries))
     }
 
+    /// 扫描 `root/system`、`root/test`、`root/user` 三个子目录，按来源标记分类。
+    ///
+    /// 加载顺序：system → test → user。同 id 冲突时先到先得（system 优先级最高）。
+    /// 不存在的子目录静默跳过。
+    pub fn scan_and_build_categorized(root: &Path) -> Result<Self, LoadError> {
+        let mut reg = Self::new();
+
+        let categories = [
+            (PluginCategory::System, root.join("system")),
+            (PluginCategory::Test, root.join("test")),
+            (PluginCategory::User, root.join("user")),
+        ];
+
+        for (category, dir) in &categories {
+            if !dir.is_dir() {
+                continue;
+            }
+            let entries = discovery::scan_plugins_root(dir)?;
+            for entry in entries {
+                match entry {
+                    Ok(loaded) => reg.insert_loaded(loaded, *category),
+                    Err(e) => reg.load_failures.push(e),
+                }
+            }
+        }
+
+        Ok(reg)
+    }
+
     /// 新增单个已加载插件；主要用于 `from_scan`，也公开以便热更新单个目录后直接合入。
-    pub fn insert_loaded(&mut self, loaded: LoadedPlugin) {
+    pub fn insert_loaded(&mut self, loaded: LoadedPlugin, category: PluginCategory) {
         let plugin_id = loaded.manifest.plugin.id.clone();
 
         // plugin.id 去重。
@@ -126,6 +182,7 @@ impl Registry {
                 plugin_dir,
                 manifest,
                 tools: kept,
+                category,
             },
         );
     }
@@ -405,7 +462,7 @@ type = "object"
         fs::create_dir_all(&new).unwrap();
         write_manifest(&new, &plugin_toml("com.example.b", "b", 1));
         let loaded = load_plugin_dir(&new).unwrap();
-        reg.insert_loaded(loaded);
+        reg.insert_loaded(loaded, PluginCategory::User);
 
         assert_eq!(reg.len(), 2);
         assert_eq!(reg.resolve_tool("b:t0").unwrap().id(), "com.example.b");

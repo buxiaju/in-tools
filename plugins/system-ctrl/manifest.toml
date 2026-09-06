@@ -1,0 +1,52 @@
+[plugin]
+id = "com.intools.system-ctrl"
+name = "系统控制"
+version = "1.0.0"
+author = "InTools"
+description = "音量控制、锁屏、发送通知、剪贴板读写"
+
+[exec]
+command = "python"
+args = ["-u", "main.py"]
+
+[[tools]]
+name = "sys:volume"
+description = "获取或设置系统音量"
+[tools.input_schema]
+type = "object"
+
+[[tools]]
+name = "sys:lock"
+description = "锁定 Windows 桌面"
+[tools.input_schema]
+type = "object"
+
+[[tools]]
+name = "sys:notify"
+description = "发送 Windows 系统通知"
+[tools.input_schema]
+type = "object"
+required = ["title", "message"]
+[tools.input_schema.properties.title]
+type = "string"
+description = "通知标题"
+[tools.input_schema.properties.message]
+type = "string"
+description = "通知内容"
+
+[[tools]]
+name = "sys:clipboard"
+description = "读取或写入系统剪贴板"
+[tools.input_schema]
+type = "object"
+
+[capabilities]
+permissions = ["clipboard:read", "clipboard:write"]
+
+[docs]
+usage_file = "README.md"
+
+[lifecycle]
+mode = "on-demand"
+idle_timeout_sec = 300
+restart_policy = "on-failure"

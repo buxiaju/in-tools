@@ -8,6 +8,33 @@
   <body>
     <canvas id="canvas"></canvas>
     <div id="hint">拖拽选择截图区域 · ESC 取消</div>
+
+    <!-- 取色器面板：跟随鼠标，显示 HEX/RGB/HSL 与坐标 -->
+    <div id="picker-panel" class="hidden">
+      <div class="picker-row">
+        <div class="picker-swatch" id="picker-swatch"></div>
+        <div class="picker-values">
+          <div class="picker-line"><span class="picker-label">HEX</span><span class="picker-val" id="picker-hex">#000000</span></div>
+          <div class="picker-line"><span class="picker-label">RGB</span><span class="picker-val" id="picker-rgb">0, 0, 0</span></div>
+          <div class="picker-line"><span class="picker-label">HSL</span><span class="picker-val" id="picker-hsl">0°, 0%, 0%</span></div>
+          <div class="picker-line"><span class="picker-label">坐标</span><span class="picker-val" id="picker-pos">0, 0</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 剪贴板历史面板 -->
+    <div id="clipboard-panel" class="hidden">
+      <div class="clip-header">
+        <span class="clip-title">剪贴板历史</span>
+        <button class="clip-close" id="clip-close">✕</button>
+      </div>
+      <div class="clip-search">
+        <input type="text" id="clip-filter" placeholder="搜索…" />
+      </div>
+      <div class="clip-list" id="clip-list"></div>
+      <div class="clip-footer" id="clip-footer">点击条目复制到剪贴板</div>
+    </div>
+
     <script type="module" src="overlay.js"></script>
   </body>
 </html>

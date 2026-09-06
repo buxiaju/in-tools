@@ -1,0 +1,97 @@
+[plugin]
+id = "com.intools.uidemo"
+name = "UI Demo"
+version = "0.1.0"
+author = "InTools"
+description = "演示插件 UI 声明系统的示例插件"
+
+[exec]
+command = "python"
+args = ["-u", "main.py"]
+
+[[tools]]
+name = "demo:status"
+description = "返回系统状态信息，演示 kv 结果展示"
+[tools.input_schema]
+type = "object"
+
+[[tools]]
+name = "demo:list"
+description = "返回文件列表，演示 table 结果展示"
+[tools.input_schema]
+type = "object"
+
+[[tools]]
+name = "demo:report"
+description = "返回 Markdown 报告，演示 markdown 结果展示"
+[tools.input_schema]
+type = "object"
+
+[[settings]]
+key = "theme_color"
+label = "主题色"
+type = "color"
+default = "#4f8ef7"
+group = "外观"
+description = "选择界面主题颜色"
+
+[[settings]]
+key = "max_items"
+label = "最大显示条数"
+type = "number"
+default = 10
+min = 1
+max = 100
+step = 1
+group = "显示"
+description = "列表展示的最大条目数"
+
+[[settings]]
+key = "api_key"
+label = "API Key"
+type = "password"
+group = "API 配置"
+placeholder = "sk-..."
+
+[[settings]]
+key = "output_dir"
+label = "输出目录"
+type = "path"
+default = "~/output"
+group = "输出"
+description = "结果保存位置"
+
+[capabilities]
+permissions = ["file:read"]
+
+[[result_display]]
+tool = "demo:status"
+type = "kv"
+fields = [
+  { key = "platform", label = "平台" },
+  { key = "python_version", label = "Python" },
+  { key = "uptime", label = "运行时间" },
+  { key = "memory_mb", label = "内存(MB)" },
+]
+
+[[result_display]]
+tool = "demo:list"
+type = "table"
+columns = [
+  { key = "name", label = "文件名" },
+  { key = "size", label = "大小" },
+  { key = "modified", label = "修改时间" },
+]
+
+[[result_display]]
+tool = "demo:report"
+type = "markdown"
+content_key = "report"
+
+[docs]
+usage_file = "README.md"
+
+[lifecycle]
+mode = "on-demand"
+idle_timeout_sec = 300
+restart_policy = "on-failure"

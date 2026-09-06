@@ -1,0 +1,39 @@
+[plugin]
+id = "com.intools.hello"
+name = "Hello 示范插件"
+version = "0.1.0"
+author = "InTools"
+description = "最小可运行插件：演示握手、工具清单与一次调用"
+
+[exec]
+command = "python"
+# -u 关闭 Python 的输出缓冲。逐行协议依赖「写一行、对端立刻读到一行」，
+# 缺了它，插件的响应会积在缓冲区里，宿主端表现为请求全部超时。
+args = ["-u", "main.py"]
+
+[[tools]]
+name = "hello:echo"
+description = "原样返回传入的文本，用于验证宿主与插件之间的调用链路"
+[tools.input_schema]
+type = "object"
+required = ["text"]
+[tools.input_schema.properties.text]
+type = "string"
+description = "要回显的文本"
+
+[[tools]]
+name = "hello:crash"
+description = "立即以非零码退出，用于验证宿主的崩溃处理与待处理请求失败逻辑"
+[tools.input_schema]
+type = "object"
+
+[capabilities]
+permissions = []
+
+[docs]
+usage_file = "README.md"
+
+[lifecycle]
+mode = "on-demand"
+idle_timeout_sec = 300
+restart_policy = "on-failure"

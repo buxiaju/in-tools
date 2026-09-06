@@ -1,0 +1,60 @@
+[plugin]
+id = "com.intools.windowinfo"
+name = "窗口信息"
+version = "0.1.0"
+author = "InTools"
+description = "获取当前活动窗口或指定窗口的标题、类名、进程、位置和大小等信息"
+
+[exec]
+command = "python"
+args = ["-u", "main.py"]
+
+[[tools]]
+name = "window:active"
+description = "获取当前前台活动窗口的详细信息，包括标题、类名、进程名、窗口位置和大小"
+[tools.input_schema]
+type = "object"
+
+[[tools]]
+name = "window:list"
+description = "列出当前所有可见的顶层窗口，返回标题、类名、进程名和窗口句柄"
+[tools.input_schema]
+type = "object"
+[tools.input_schema.properties.include_minimized]
+type = "boolean"
+description = "是否包含最小化窗口，默认 false"
+[tools.input_schema.properties.max_results]
+type = "integer"
+description = "最多返回的窗口数，默认 50"
+minimum = 1
+maximum = 200
+
+[[tools]]
+name = "window:find"
+description = "按标题关键词搜索窗口，返回匹配的窗口信息列表"
+[tools.input_schema]
+type = "object"
+required = ["title_keyword"]
+[tools.input_schema.properties.title_keyword]
+type = "string"
+description = "窗口标题中需要包含的关键词（不区分大小写）"
+[tools.input_schema.properties.max_results]
+type = "integer"
+description = "最多返回的结果数，默认 20"
+minimum = 1
+maximum = 100
+
+[capabilities]
+permissions = []
+
+[shortcut]
+key = "Ctrl+Shift+W"
+tool = "window:active"
+
+[docs]
+usage_file = "README.md"
+
+[lifecycle]
+mode = "on-demand"
+idle_timeout_sec = 120
+restart_policy = "on-failure"

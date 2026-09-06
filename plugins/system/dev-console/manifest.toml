@@ -1,0 +1,96 @@
+[plugin]
+id = "com.intools.dev-console"
+name = "开发者控制台"
+version = "1.0.0"
+author = "InTools"
+description = "通过 AI 对话调试插件：列出插件/工具、调用任意工具、校验 manifest、搜索"
+
+[exec]
+command = "python"
+args = ["-u", "main.py"]
+
+[[tools]]
+name = "dev:plugins"
+description = "列出所有已加载插件及其运行状态、工具数、权限声明"
+[tools.input_schema]
+type = "object"
+
+[[tools]]
+name = "dev:tools"
+description = "列出所有可用工具及其 JSON Schema（跨插件）"
+[tools.input_schema]
+type = "object"
+
+[[tools]]
+name = "dev:call"
+description = "直接调用任意工具，用于开发调试"
+[tools.input_schema]
+type = "object"
+required = ["tool"]
+[tools.input_schema.properties.tool]
+type = "string"
+description = "工具全名，如 hello:echo"
+[tools.input_schema.properties.arguments]
+type = "object"
+description = "工具参数"
+
+[[tools]]
+name = "dev:config"
+description = "读取或写入本插件的私有配置"
+[tools.input_schema]
+type = "object"
+required = ["action"]
+[tools.input_schema.properties.action]
+type = "string"
+description = "get 或 set"
+[tools.input_schema.properties.value]
+type = "object"
+description = "set 时要写入的 JSON 值"
+
+[[tools]]
+name = "dev:validate"
+description = "校验 manifest.toml 文件，报告格式、校验、权限问题"
+[tools.input_schema]
+type = "object"
+required = ["path"]
+[tools.input_schema.properties.path]
+type = "string"
+description = "manifest.toml 的绝对路径或相对于插件目录的路径"
+
+[[tools]]
+name = "dev:search"
+description = "搜索插件目录，按关键词匹配插件名、工具名或描述"
+[tools.input_schema]
+type = "object"
+required = ["query"]
+[tools.input_schema.properties.query]
+type = "string"
+description = "搜索关键词"
+
+[capabilities]
+permissions = []
+
+[[result_display]]
+tool = "dev:plugins"
+type = "table"
+columns = [
+  { key = "id", label = "插件 ID" },
+  { key = "tools_count", label = "工具数" },
+]
+
+[[result_display]]
+tool = "dev:validate"
+type = "kv"
+fields = [
+  { key = "valid", label = "校验结果" },
+  { key = "issues_count", label = "问题数" },
+  { key = "warnings_count", label = "警告数" },
+]
+
+[docs]
+usage_file = "README.md"
+
+[lifecycle]
+mode = "on-demand"
+idle_timeout_sec = 300
+restart_policy = "on-failure"

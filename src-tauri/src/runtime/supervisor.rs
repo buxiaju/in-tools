@@ -1,4 +1,4 @@
-﻿//! 调度器：插件实例的统一管理与工具调用入口。
+//! 调度器：插件实例的统一管理与工具调用入口。
 //!
 //! 设计文档 §6.2 的六步调用链在 [`Supervisor::call_tool`] 中实现：
 //! 工具名解析 → 权限校验 → 调用深度检查 → 按需唤醒 → RPC 转发 → 审计日志。
@@ -1103,6 +1103,7 @@ mod tests {
         RequestId, ResponseBody,
     };
     use crate::registry::discovery::LoadedPlugin;
+    use crate::registry::PluginCategory;
     use crate::runtime::instance::{
         HOST_CALL_TOOL, HOST_GET_CONFIG, HOST_LIST_TOOLS, HOST_NOTIFY, HOST_SET_CONFIG,
     };
@@ -1142,6 +1143,7 @@ mod tests {
             shortcut: None,
             settings: Vec::new(),
             docs: None,
+            result_display: Vec::new(),
         }
     }
 
@@ -1151,7 +1153,7 @@ mod tests {
             reg.insert_loaded(LoadedPlugin {
                 plugin_dir: PathBuf::from(format!("/plugins/{}", m.plugin.id)),
                 manifest: m,
-            });
+            }, PluginCategory::User);
         }
         reg
     }
@@ -1161,7 +1163,7 @@ mod tests {
         registry_of(vec![manifest_of(
             "com.example.demo",
             vec!["demo:echo"],
-            vec!["net:http"],
+            vec!["network:http"],
             Lifecycle::default(),
         )])
     }
@@ -2271,7 +2273,7 @@ mod tests {
         let reg = registry_of(vec![manifest_of(
             "com.example.startup",
             vec!["demo:echo"],
-            vec!["net:http"],
+            vec!["network:http"],
             startup,
         )]);
         let factory = RecordingFactory::new(vec!["demo:echo"]);
