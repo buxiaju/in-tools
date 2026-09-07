@@ -18,7 +18,7 @@ const toml = require('toml');
 // 配置
 const PLUGINS_DIR = path.join(__dirname, '..', 'plugins');
 const OUTPUT_DIR = path.join(__dirname, '..', 'marketplace');
-const GITHUB_REPO = 'buxiaju/InTools'; // 替换为你的 GitHub 仓库
+const GITHUB_REPO = 'buxiaju/in-tools'; // 替换为你的 GitHub 仓库
 
 // 确保输出目录存在
 if (!fs.existsSync(OUTPUT_DIR)) {

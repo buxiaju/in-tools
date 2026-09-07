@@ -2,9 +2,10 @@ name: Build Marketplace Index
 
 on:
   push:
-    branches: [main]
+    branches: [master, main]
     paths:
       - 'plugins/**'
+      - 'scripts/**'
       - '.github/workflows/build-marketplace-index.yml'
   schedule:
     # 每天凌晨 2 点运行一次
@@ -31,6 +32,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
 
       - name: Build Marketplace Index
         run: |

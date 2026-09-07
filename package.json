@@ -1,0 +1,12 @@
+{
+  "name": "intools-marketplace",
+  "version": "1.0.0",
+  "description": "InTools 插件市场构建工具",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build-marketplace-index.js"
+  },
+  "dependencies": {
+    "toml": "^3.0.0"
+  }
+}
