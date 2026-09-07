@@ -5,538 +5,970 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>InTools 插件市场</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+    :root {
+      --primary: #6366f1;
+      --primary-light: #818cf8;
+      --primary-dark: #4f46e5;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --border: #e2e8f0;
+      --radius: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+      --shadow-lg: 0 10px 25px rgba(0,0,0,.1);
     }
-    
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif;
       line-height: 1.6;
-      color: #333;
-      background: #f5f5f5;
+      color: var(--text);
+      background: var(--bg);
     }
-    
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-    
-    header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 40px 0;
-      margin-bottom: 30px;
-    }
-    
-    header h1 {
-      font-size: 2.5em;
-      margin-bottom: 10px;
-    }
-    
-    header p {
-      font-size: 1.2em;
-      opacity: 0.9;
-    }
-    
-    .search-box {
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-      margin-bottom: 30px;
-    }
-    
-    .search-box input {
-      width: 100%;
-      padding: 12px;
-      font-size: 16px;
-      border: 2px solid #ddd;
-      border-radius: 4px;
-    }
-    
-    .plugins-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 20px;
-    }
-    
-    .plugin-card {
-      background: white;
-      border-radius: 8px;
-      padding: 20px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-      transition: transform 0.2s;
-    }
-    
-    .plugin-card:hover {
-      transform: translateY(-5px);
-    }
-    
-    .plugin-card h3 {
-      color: #667eea;
-      margin-bottom: 10px;
-    }
-    
-    .plugin-card p {
-      color: #666;
-      margin-bottom: 15px;
-    }
-    
-    .plugin-meta {
-      display: flex;
-      justify-content: space-between;
-      color: #999;
-      font-size: 0.9em;
-    }
-    
-    .tags {
-      margin-top: 10px;
-    }
-    
-    .tag {
-      display: inline-block;
-      background: #e9ecef;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 0.8em;
-      margin-right: 5px;
-      margin-bottom: 5px;
-    }
-    
-    footer {
+
+    /* ── Header ── */
+    .hero {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #a855f7 100%);
+      color: #fff;
+      padding: 48px 24px 40px;
       text-align: center;
-      padding: 30px;
-      color: #666;
-      margin-top: 50px;
+    }
+    .hero h1 { font-size: 2.2em; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.5px; }
+    .hero p { font-size: 1.1em; opacity: .88; margin-bottom: 24px; }
+    .stats-row {
+      display: flex; justify-content: center; gap: 32px; flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .stat { text-align: center; }
+    .stat-num { font-size: 1.6em; font-weight: 700; }
+    .stat-label { font-size: .85em; opacity: .75; }
+
+    /* ── Search & Filters ── */
+    .toolbar {
+      max-width: 1200px; margin: -24px auto 0; padding: 0 20px; position: relative; z-index: 10;
+    }
+    .search-card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-lg);
+      padding: 20px 24px;
+    }
+    .search-row {
+      display: flex; gap: 12px; align-items: center;
+    }
+    .search-row input {
+      flex: 1; padding: 12px 16px; font-size: 15px;
+      border: 2px solid var(--border); border-radius: 8px; outline: none;
+      transition: border-color .2s;
+    }
+    .search-row input:focus { border-color: var(--primary); }
+
+    .filter-bar {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center;
+    }
+    .filter-bar label { font-size: .85em; color: var(--text-secondary); margin-right: 4px; }
+    .filter-btn {
+      padding: 4px 12px; border-radius: 16px; border: 1px solid var(--border);
+      background: transparent; color: var(--text-secondary); font-size: .82em;
+      cursor: pointer; transition: all .15s;
+    }
+    .filter-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .filter-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+    .filter-divider {
+      width: 1px; height: 20px; background: var(--border); margin: 0 4px;
+    }
+
+    .result-count {
+      margin-top: 16px; font-size: .9em; color: var(--text-secondary);
+    }
+
+    /* ── Grid ── */
+    .grid {
+      max-width: 1200px; margin: 24px auto 0; padding: 0 20px;
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px;
+    }
+    .plugin-card {
+      background: var(--card-bg); border-radius: var(--radius); padding: 20px;
+      box-shadow: var(--shadow); border: 1px solid var(--border);
+      cursor: pointer; transition: transform .18s, box-shadow .18s;
+      position: relative; overflow: hidden;
+    }
+    .plugin-card:hover {
+      transform: translateY(-3px); box-shadow: var(--shadow-lg);
+    }
+    .plugin-card.hidden { display: none; }
+
+    .card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .card-icon {
+      width: 42px; height: 42px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-light));
+      color: #fff; display: flex; align-items: center; justify-content: center;
+      font-size: 1.2em; font-weight: 700; flex-shrink: 0;
+    }
+    .card-title { flex: 1; min-width: 0; }
+    .card-title h3 { font-size: 1.05em; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .card-author { font-size: .8em; color: var(--text-secondary); }
+    .lang-badge {
+      padding: 2px 8px; border-radius: 10px; color: #fff;
+      font-size: .72em; font-weight: 600; white-space: nowrap; flex-shrink: 0;
+    }
+    .card-desc {
+      font-size: .9em; color: var(--text-secondary); margin-bottom: 12px;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+      min-height: 44px;
+    }
+    .card-tags { margin-bottom: 12px; }
+    .tag {
+      display: inline-block; background: #f1f5f9; color: var(--text-secondary);
+      padding: 2px 8px; border-radius: 6px; font-size: .78em; margin: 0 4px 4px 0;
+    }
+    .card-footer {
+      display: flex; gap: 12px; font-size: .8em; color: var(--text-secondary);
+      border-top: 1px solid var(--border); padding-top: 10px;
+    }
+
+    /* ── Category strip ── */
+    .plugin-card[data-category="system"]::before {
+      content: ''; position: absolute; top: 0; left: 0;
+      width: 3px; height: 100%; background: var(--primary);
+    }
+    .plugin-card[data-category="user"]::before {
+      content: ''; position: absolute; top: 0; left: 0;
+      width: 3px; height: 100%; background: #10b981;
+    }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.45); z-index: 1000;
+      justify-content: center; align-items: center; padding: 20px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--card-bg); border-radius: var(--radius);
+      width: 100%; max-width: 640px; max-height: 85vh; overflow-y: auto;
+      box-shadow: var(--shadow-lg); padding: 32px;
+    }
+    .modal-close {
+      float: right; background: none; border: none; font-size: 1.5em;
+      cursor: pointer; color: var(--text-secondary); line-height: 1;
+    }
+    .modal h2 { font-size: 1.3em; margin-bottom: 8px; padding-right: 32px; }
+    .modal .modal-meta {
+      display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;
+      font-size: .88em; color: var(--text-secondary);
+    }
+    .modal .modal-desc { margin-bottom: 16px; line-height: 1.7; }
+    .modal .modal-section { margin-bottom: 16px; }
+    .modal .modal-section h4 { font-size: .92em; margin-bottom: 8px; color: var(--primary); }
+    .modal .tool-list {
+      list-style: none; padding: 0;
+    }
+    .modal .tool-list li {
+      padding: 8px 12px; background: #f8fafc; border-radius: 8px;
+      margin-bottom: 6px; font-size: .88em;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .modal .tool-name { font-weight: 600; font-family: 'Fira Code', monospace; color: var(--primary-dark); }
+    .modal .tool-desc { color: var(--text-secondary); font-size: .92em; }
+    .modal .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+    .modal .btn {
+      padding: 10px 20px; border-radius: 8px; font-size: .92em;
+      font-weight: 600; cursor: pointer; border: none; transition: all .15s;
+    }
+    .modal .btn-primary { background: var(--primary); color: #fff; }
+    .modal .btn-primary:hover { background: var(--primary-dark); }
+    .modal .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .modal .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+
+    .empty-state {
+      grid-column: 1 / -1; text-align: center; padding: 60px 20px;
+      color: var(--text-secondary);
+    }
+    .empty-state .empty-icon { font-size: 3em; margin-bottom: 12px; opacity: .4; }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center; padding: 32px 20px; color: var(--text-secondary);
+      font-size: .88em; border-top: 1px solid var(--border); margin-top: 48px;
+    }
+    footer a { color: var(--primary); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      .hero h1 { font-size: 1.6em; }
+      .stats-row { gap: 20px; }
+      .grid { grid-template-columns: 1fr; }
+      .modal { padding: 20px; }
     }
   </style>
 </head>
 <body>
-  <header>
-    <div class="container">
-      <h1>InTools 插件市场</h1>
-      <p>发现和安装 InTools 插件，扩展你的桌面工具能力</p>
+  <div class="hero">
+    <h1>🧩 InTools 插件市场</h1>
+    <p>一切皆插件 — 发现、安装、扩展你的桌面工具能力</p>
+    <div class="stats-row">
+      <div class="stat"><div class="stat-num">21</div><div class="stat-label">个插件</div></div>
+      <div class="stat"><div class="stat-num">20</div><div class="stat-label">系统内置</div></div>
+      <div class="stat"><div class="stat-num">68</div><div class="stat-label">个工具</div></div>
+      <div class="stat"><div class="stat-num">3</div><div class="stat-label">种语言</div></div>
     </div>
-  </header>
+  </div>
 
-  <div class="container">
-    <div class="search-box">
-      <input type="text" id="searchInput" placeholder="搜索插件..." oninput="filterPlugins()">
+  <div class="toolbar">
+    <div class="search-card">
+      <div class="search-row">
+        <input type="text" id="searchInput" placeholder="搜索插件名称、描述、标签或工具名..." autofocus>
+      </div>
+      <div class="filter-bar">
+        <label>分类：</label>
+        <button class="filter-btn active" data-filter-type="category" data-filter-value="all">全部</button>
+        <button class="filter-btn" data-filter-type="category" data-filter-value="system">系统插件</button>
+        <button class="filter-btn" data-filter-type="category" data-filter-value="user">用户插件</button>
+        <div class="filter-divider"></div>
+        <label>语言：</label>
+        <button class="filter-btn active" data-filter-type="language" data-filter-value="all">全部</button>
+        <button class="filter-btn" data-filter-type="language" data-filter-value="Go">Go</button><button class="filter-btn" data-filter-type="language" data-filter-value="Node.js">Node.js</button><button class="filter-btn" data-filter-type="language" data-filter-value="Python">Python</button>
+      </div>
+      <div class="filter-bar" style="margin-top:8px;">
+        <label>标签：</label>
+        <button class="filter-btn" data-filter-type="tag" data-filter-value="ai">ai</button><button class="filter-btn" data-filter-type="tag" data-filter-value="app">app</button><button class="filter-btn" data-filter-type="tag" data-filter-value="clipboard">clipboard</button><button class="filter-btn" data-filter-type="tag" data-filter-value="color">color</button><button class="filter-btn" data-filter-type="tag" data-filter-value="demo">demo</button><button class="filter-btn" data-filter-type="tag" data-filter-value="dev">dev</button><button class="filter-btn" data-filter-type="tag" data-filter-value="file">file</button><button class="filter-btn" data-filter-type="tag" data-filter-value="hash">hash</button><button class="filter-btn" data-filter-type="tag" data-filter-value="hello">hello</button><button class="filter-btn" data-filter-type="tag" data-filter-value="net">net</button><button class="filter-btn" data-filter-type="tag" data-filter-value="network">network</button><button class="filter-btn" data-filter-type="tag" data-filter-value="ocr">ocr</button><button class="filter-btn" data-filter-type="tag" data-filter-value="plugin">plugin</button><button class="filter-btn" data-filter-type="tag" data-filter-value="proc">proc</button><button class="filter-btn" data-filter-type="tag" data-filter-value="process">process</button>
+      </div>
+      <div class="result-count" id="resultCount">显示 21 个插件</div>
     </div>
+  </div>
 
-    <div class="plugins-grid" id="pluginsGrid">
-      
-        <div class="plugin-card" data-id="com.intools.ai-orchestrator" data-name="AI 编排" data-description="对接 OpenAI 兼容 API，自动调用其他插件的工具完成任务">
-          <h3>AI 编排</h3>
-          <p>对接 OpenAI 兼容 API，自动调用其他插件的工具完成任务</p>
-          <div class="tags">
-            <span class="tag">ai</span><span class="tag">network</span>
+  <div class="grid" id="pluginsGrid">
+    
+        <div class="plugin-card cat-system"
+             data-id="com.intools.plugin-builder"
+             data-name="插件生成器"
+             data-description="在 AI 对话中一句话生成完整插件：描述需求，自动生成 manifest + 代码 + 文档"
+             data-category="system"
+             data-tags="plugin"
+             data-language="Python"
+             data-tools="plugin:generate,plugin:list-templates"
+             onclick="showDetail(this)">
+          <div class="card-header">
+            <div class="card-icon">插</div>
+            <div class="card-title">
+              <h3>插件生成器</h3>
+              <span class="card-author">InTools</span>
+            </div>
+            <span class="lang-badge" style="background:#3572A5">Python</span>
           </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v0.2.0</span>
-          </div>
-        </div>
-      
-        <div class="plugin-card" data-id="com.intools.app-launcher" data-name="应用启动器" data-description="打开文件、文件夹、网址，搜索已安装应用，在资源管理器中定位文件">
-          <h3>应用启动器</h3>
-          <p>打开文件、文件夹、网址，搜索已安装应用，在资源管理器中定位文件</p>
-          <div class="tags">
-            <span class="tag">app</span><span class="tag">file</span>
-          </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v1.0.0</span>
-          </div>
-        </div>
-      
-        <div class="plugin-card" data-id="com.intools.clipboard" data-name="剪贴板工具" data-description="读取和写入系统剪贴板的文本内容，提供剪贴板历史记录">
-          <h3>剪贴板工具</h3>
-          <p>读取和写入系统剪贴板的文本内容，提供剪贴板历史记录</p>
-          <div class="tags">
-            <span class="tag">clipboard</span>
-          </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v0.1.0</span>
-          </div>
-        </div>
-      
-        <div class="plugin-card" data-id="com.intools.colorpicker" data-name="屏幕取色器" data-description="获取鼠标当前位置的屏幕像素颜色，返回 HEX / RGB / HSL 格式">
-          <h3>屏幕取色器</h3>
-          <p>获取鼠标当前位置的屏幕像素颜色，返回 HEX / RGB / HSL 格式</p>
-          <div class="tags">
-            <span class="tag">color</span><span class="tag">screen</span><span class="tag">clipboard</span>
-          </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v0.1.0</span>
-          </div>
-        </div>
-      
-        <div class="plugin-card" data-id="com.intools.dev-console" data-name="开发者控制台" data-description="通过 AI 对话调试插件：列出插件/工具、调用任意工具、校验 manifest、搜索">
-          <h3>开发者控制台</h3>
-          <p>通过 AI 对话调试插件：列出插件/工具、调用任意工具、校验 manifest、搜索</p>
-          <div class="tags">
-            <span class="tag">dev</span>
-          </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v1.0.0</span>
-          </div>
-        </div>
-      
-        <div class="plugin-card" data-id="com.intools.file-hash" data-name="文件哈希" data-description="计算文件 MD5/SHA1/SHA256 哈希值，用于文件校验与完整性检查（Go 编译型插件）">
-          <h3>文件哈希</h3>
-          <p>计算文件 MD5/SHA1/SHA256 哈希值，用于文件校验与完整性检查（Go 编译型插件）</p>
-          <div class="tags">
-            <span class="tag">hash</span><span class="tag">file</span>
-          </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v1.0.0</span>
-          </div>
-        </div>
-      
-        <div class="plugin-card" data-id="com.intools.file-ops" data-name="文件操作" data-description="文件系统基本操作：读取、写入、列目录、创建目录、删除、复制、移动、获取信息">
-          <h3>文件操作</h3>
-          <p>文件系统基本操作：读取、写入、列目录、创建目录、删除、复制、移动、获取信息</p>
-          <div class="tags">
-            <span class="tag">file</span>
-          </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v1.0.0</span>
-          </div>
-        </div>
-      
-        <div class="plugin-card" data-id="com.intools.filesearch" data-name="文件搜索" data-description="按文件名关键词搜索指定目录，仅使用 Python 标准库">
-          <h3>文件搜索</h3>
-          <p>按文件名关键词搜索指定目录，仅使用 Python 标准库</p>
-          <div class="tags">
-            <span class="tag">search</span><span class="tag">file</span>
-          </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v0.1.0</span>
-          </div>
-        </div>
-      
-        <div class="plugin-card" data-id="com.intools.hello" data-name="Hello 示范插件" data-description="最小可运行插件：演示握手、工具清单与一次调用">
-          <h3>Hello 示范插件</h3>
-          <p>最小可运行插件：演示握手、工具清单与一次调用</p>
-          <div class="tags">
-            <span class="tag">hello</span>
-          </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v0.1.0</span>
-          </div>
-        </div>
-      
-        <div class="plugin-card" data-id="com.intools.net-tools" data-name="网络工具" data-description="Ping、DNS 查询、端口检测、HTTP 请求、本机 IP 获取">
-          <h3>网络工具</h3>
-          <p>Ping、DNS 查询、端口检测、HTTP 请求、本机 IP 获取</p>
-          <div class="tags">
-            <span class="tag">net</span><span class="tag">network</span>
-          </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v1.0.0</span>
-          </div>
-        </div>
-      
-        <div class="plugin-card" data-id="com.intools.ocr" data-name="屏幕文字识别" data-description="截取屏幕区域并使用 Windows 内置 OCR 引擎识别其中的文字">
-          <h3>屏幕文字识别</h3>
-          <p>截取屏幕区域并使用 Windows 内置 OCR 引擎识别其中的文字</p>
-          <div class="tags">
-            <span class="tag">ocr</span><span class="tag">screen</span><span class="tag">clipboard</span>
-          </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v0.1.0</span>
-          </div>
-        </div>
-      
-        <div class="plugin-card" data-id="com.intools.plugin-builder" data-name="插件生成器" data-description="在 AI 对话中一句话生成完整插件：描述需求，自动生成 manifest + 代码 + 文档">
-          <h3>插件生成器</h3>
-          <p>在 AI 对话中一句话生成完整插件：描述需求，自动生成 manifest + 代码 + 文档</p>
-          <div class="tags">
+          <p class="card-desc">在 AI 对话中一句话生成完整插件：描述需求，自动生成 manifest + 代码 + 文档</p>
+          <div class="card-tags">
             <span class="tag">plugin</span>
           </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v1.0.0</span>
+          <div class="card-footer">
+            <span class="card-version">v1.0.0</span>
+            <span class="card-size">25.9 KB</span>
+            <span class="card-tools">2 个工具</span>
           </div>
         </div>
-      
-        <div class="plugin-card" data-id="com.intools.process-mgr" data-name="进程管理" data-description="列出/搜索/终止进程，启动程序，执行 shell 命令">
-          <h3>进程管理</h3>
-          <p>列出/搜索/终止进程，启动程序，执行 shell 命令</p>
-          <div class="tags">
-            <span class="tag">proc</span><span class="tag">process</span><span class="tag">shell</span>
+
+        <div class="plugin-card cat-system"
+             data-id="com.intools.windowinfo"
+             data-name="窗口信息"
+             data-description="获取当前活动窗口或指定窗口的标题、类名、进程、位置和大小等信息"
+             data-category="system"
+             data-tags="window"
+             data-language="Python"
+             data-tools="window:active,window:list,window:find"
+             onclick="showDetail(this)">
+          <div class="card-header">
+            <div class="card-icon">窗</div>
+            <div class="card-title">
+              <h3>窗口信息</h3>
+              <span class="card-author">InTools</span>
+            </div>
+            <span class="lang-badge" style="background:#3572A5">Python</span>
           </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v1.0.0</span>
-          </div>
-        </div>
-      
-        <div class="plugin-card" data-id="com.intools.screenshot" data-name="屏幕截图" data-description="截取主屏幕画面，保存为 PNG 文件并返回路径">
-          <h3>屏幕截图</h3>
-          <p>截取主屏幕画面，保存为 PNG 文件并返回路径</p>
-          <div class="tags">
-            <span class="tag">screenshot</span><span class="tag">screen</span>
-          </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v0.1.0</span>
-          </div>
-        </div>
-      
-        <div class="plugin-card" data-id="com.intools.system-ctrl" data-name="系统控制" data-description="音量控制、锁屏、发送通知、剪贴板读写">
-          <h3>系统控制</h3>
-          <p>音量控制、锁屏、发送通知、剪贴板读写</p>
-          <div class="tags">
-            <span class="tag">sys</span><span class="tag">clipboard</span>
-          </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v1.0.0</span>
-          </div>
-        </div>
-      
-        <div class="plugin-card" data-id="com.intools.uidemo" data-name="UI Demo" data-description="演示插件 UI 声明系统的示例插件">
-          <h3>UI Demo</h3>
-          <p>演示插件 UI 声明系统的示例插件</p>
-          <div class="tags">
-            <span class="tag">demo</span><span class="tag">file</span>
-          </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v0.1.0</span>
-          </div>
-        </div>
-      
-        <div class="plugin-card" data-id="com.intools.web-scraper" data-name="网页抓取" data-description="抓取网页内容、提取文本、解析 HTML">
-          <h3>网页抓取</h3>
-          <p>抓取网页内容、提取文本、解析 HTML</p>
-          <div class="tags">
-            <span class="tag">web</span><span class="tag">network</span>
-          </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v1.0.0</span>
-          </div>
-        </div>
-      
-        <div class="plugin-card" data-id="com.intools.windowinfo" data-name="窗口信息" data-description="获取当前活动窗口或指定窗口的标题、类名、进程、位置和大小等信息">
-          <h3>窗口信息</h3>
-          <p>获取当前活动窗口或指定窗口的标题、类名、进程、位置和大小等信息</p>
-          <div class="tags">
+          <p class="card-desc">获取当前活动窗口或指定窗口的标题、类名、进程、位置和大小等信息</p>
+          <div class="card-tags">
             <span class="tag">window</span>
           </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v0.1.0</span>
+          <div class="card-footer">
+            <span class="card-version">v0.1.0</span>
+            <span class="card-size">8.7 KB</span>
+            <span class="card-tools">3 个工具</span>
           </div>
         </div>
-      
-        <div class="plugin-card" data-id="com.intools.workflow-runner" data-name="工作流" data-description="串联多个插件工具，编排自动化工作流（演示反向 RPC 与跨插件调用）">
-          <h3>工作流</h3>
-          <p>串联多个插件工具，编排自动化工作流（演示反向 RPC 与跨插件调用）</p>
-          <div class="tags">
+
+        <div class="plugin-card cat-system"
+             data-id="com.intools.workflow-runner"
+             data-name="工作流"
+             data-description="串联多个插件工具，编排自动化工作流（演示反向 RPC 与跨插件调用）"
+             data-category="system"
+             data-tags="workflow"
+             data-language="Node.js"
+             data-tools="workflow:list,workflow:run,workflow:chain"
+             onclick="showDetail(this)">
+          <div class="card-header">
+            <div class="card-icon">工</div>
+            <div class="card-title">
+              <h3>工作流</h3>
+              <span class="card-author">InTools</span>
+            </div>
+            <span class="lang-badge" style="background:#339933">Node.js</span>
+          </div>
+          <p class="card-desc">串联多个插件工具，编排自动化工作流（演示反向 RPC 与跨插件调用）</p>
+          <div class="card-tags">
             <span class="tag">workflow</span>
           </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v1.0.0</span>
+          <div class="card-footer">
+            <span class="card-version">v1.0.0</span>
+            <span class="card-size">8.0 KB</span>
+            <span class="card-tools">3 个工具</span>
           </div>
         </div>
-      
-        <div class="plugin-card" data-id="com.intools.caller" data-name="Caller 测试插件" data-description="反向 RPC 集成测试的调用方：通过 host/* 回调宿主，验证插件间调用链路">
-          <h3>Caller 测试插件</h3>
-          <p>反向 RPC 集成测试的调用方：通过 host/* 回调宿主，验证插件间调用链路</p>
-          <div class="tags">
-            <span class="tag">caller</span>
+
+        <div class="plugin-card cat-system"
+             data-id="com.intools.clipboard"
+             data-name="剪贴板工具"
+             data-description="读取和写入系统剪贴板的文本内容，提供剪贴板历史记录"
+             data-category="system"
+             data-tags="clipboard"
+             data-language="Python"
+             data-tools="clipboard:read_text,clipboard:write_text,clipboard:append_text,clipboard:clear,clipboard:has_text"
+             onclick="showDetail(this)">
+          <div class="card-header">
+            <div class="card-icon">剪</div>
+            <div class="card-title">
+              <h3>剪贴板工具</h3>
+              <span class="card-author">InTools</span>
+            </div>
+            <span class="lang-badge" style="background:#3572A5">Python</span>
           </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v0.1.0</span>
-          </div>
-        </div>
-      
-        <div class="plugin-card" data-id="com.intools.responder" data-name="Responder 测试插件" data-description="反向 RPC 集成测试的响应方：声明 screen:capture 权限，用于验证权限拦截">
-          <h3>Responder 测试插件</h3>
-          <p>反向 RPC 集成测试的响应方：声明 screen:capture 权限，用于验证权限拦截</p>
-          <div class="tags">
-            <span class="tag">responder</span><span class="tag">screen</span>
-          </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v0.1.0</span>
-          </div>
-        </div>
-      
-        <div class="plugin-card" data-id="com.intools.caller" data-name="Caller 测试插件" data-description="反向 RPC 集成测试的调用方：通过 host/* 回调宿主，验证插件间调用链路">
-          <h3>Caller 测试插件</h3>
-          <p>反向 RPC 集成测试的调用方：通过 host/* 回调宿主，验证插件间调用链路</p>
-          <div class="tags">
-            <span class="tag">caller</span>
-          </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v0.1.0</span>
-          </div>
-        </div>
-      
-        <div class="plugin-card" data-id="com.intools.clipboard" data-name="剪贴板工具" data-description="读取和写入系统剪贴板的文本内容，提供剪贴板历史记录">
-          <h3>剪贴板工具</h3>
-          <p>读取和写入系统剪贴板的文本内容，提供剪贴板历史记录</p>
-          <div class="tags">
+          <p class="card-desc">读取和写入系统剪贴板的文本内容，提供剪贴板历史记录</p>
+          <div class="card-tags">
             <span class="tag">clipboard</span>
           </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v0.1.0</span>
+          <div class="card-footer">
+            <span class="card-version">v0.1.0</span>
+            <span class="card-size">8.2 KB</span>
+            <span class="card-tools">5 个工具</span>
           </div>
         </div>
-      
-        <div class="plugin-card" data-id="com.intools.colorpicker" data-name="屏幕取色器" data-description="获取鼠标当前位置的屏幕像素颜色，返回 HEX / RGB / HSL 格式">
-          <h3>屏幕取色器</h3>
-          <p>获取鼠标当前位置的屏幕像素颜色，返回 HEX / RGB / HSL 格式</p>
-          <div class="tags">
-            <span class="tag">color</span><span class="tag">screen</span><span class="tag">clipboard</span>
+
+        <div class="plugin-card cat-system"
+             data-id="com.intools.process-mgr"
+             data-name="进程管理"
+             data-description="列出/搜索/终止进程，启动程序，执行 shell 命令"
+             data-category="system"
+             data-tags="proc,process,shell"
+             data-language="Python"
+             data-tools="proc:list,proc:kill,proc:start,proc:exec"
+             onclick="showDetail(this)">
+          <div class="card-header">
+            <div class="card-icon">进</div>
+            <div class="card-title">
+              <h3>进程管理</h3>
+              <span class="card-author">InTools</span>
+            </div>
+            <span class="lang-badge" style="background:#3572A5">Python</span>
           </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v0.1.0</span>
+          <p class="card-desc">列出/搜索/终止进程，启动程序，执行 shell 命令</p>
+          <div class="card-tags">
+            <span class="tag">proc</span><span class="tag">process</span><span class="tag">shell</span>
           </div>
-        </div>
-      
-        <div class="plugin-card" data-id="com.example.demohello" data-name="示范插件" data-description="示范插件">
-          <h3>示范插件</h3>
-          <p>示范插件</p>
-          <div class="tags">
-            <span class="tag">demo</span>
-          </div>
-          <div class="plugin-meta">
-            <span>未知作者</span>
-            <span>v1.0.0</span>
-          </div>
-        </div>
-      
-        <div class="plugin-card" data-id="com.intools.filesearch" data-name="文件搜索" data-description="按文件名关键词搜索指定目录，仅使用 Python 标准库">
-          <h3>文件搜索</h3>
-          <p>按文件名关键词搜索指定目录，仅使用 Python 标准库</p>
-          <div class="tags">
-            <span class="tag">search</span><span class="tag">file</span>
-          </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v0.1.0</span>
+          <div class="card-footer">
+            <span class="card-version">v1.0.0</span>
+            <span class="card-size">7.1 KB</span>
+            <span class="card-tools">4 个工具</span>
           </div>
         </div>
-      
-        <div class="plugin-card" data-id="com.intools.hello" data-name="Hello 示范插件" data-description="最小可运行插件：演示握手、工具清单与一次调用">
-          <h3>Hello 示范插件</h3>
-          <p>最小可运行插件：演示握手、工具清单与一次调用</p>
-          <div class="tags">
-            <span class="tag">hello</span>
+
+        <div class="plugin-card cat-system"
+             data-id="com.intools.dev-console"
+             data-name="开发者控制台"
+             data-description="通过 AI 对话调试插件：列出插件/工具、调用任意工具、校验 manifest、搜索"
+             data-category="system"
+             data-tags="dev"
+             data-language="Python"
+             data-tools="dev:plugins,dev:tools,dev:call,dev:config,dev:validate,dev:search"
+             onclick="showDetail(this)">
+          <div class="card-header">
+            <div class="card-icon">开</div>
+            <div class="card-title">
+              <h3>开发者控制台</h3>
+              <span class="card-author">InTools</span>
+            </div>
+            <span class="lang-badge" style="background:#3572A5">Python</span>
           </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v0.1.0</span>
+          <p class="card-desc">通过 AI 对话调试插件：列出插件/工具、调用任意工具、校验 manifest、搜索</p>
+          <div class="card-tags">
+            <span class="tag">dev</span>
           </div>
-        </div>
-      
-        <div class="plugin-card" data-id="com.intools.ocr" data-name="屏幕文字识别" data-description="截取屏幕区域并使用 Windows 内置 OCR 引擎识别其中的文字">
-          <h3>屏幕文字识别</h3>
-          <p>截取屏幕区域并使用 Windows 内置 OCR 引擎识别其中的文字</p>
-          <div class="tags">
-            <span class="tag">ocr</span><span class="tag">screen</span><span class="tag">clipboard</span>
-          </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v0.1.0</span>
-          </div>
-        </div>
-      
-        <div class="plugin-card" data-id="com.intools.responder" data-name="Responder 测试插件" data-description="反向 RPC 集成测试的响应方：声明 screen:capture 权限，用于验证权限拦截">
-          <h3>Responder 测试插件</h3>
-          <p>反向 RPC 集成测试的响应方：声明 screen:capture 权限，用于验证权限拦截</p>
-          <div class="tags">
-            <span class="tag">responder</span><span class="tag">screen</span>
-          </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v0.1.0</span>
+          <div class="card-footer">
+            <span class="card-version">v1.0.0</span>
+            <span class="card-size">16.6 KB</span>
+            <span class="card-tools">6 个工具</span>
           </div>
         </div>
-      
-        <div class="plugin-card" data-id="com.intools.screenshot" data-name="屏幕截图" data-description="截取主屏幕画面，保存为 PNG 文件并返回路径">
-          <h3>屏幕截图</h3>
-          <p>截取主屏幕画面，保存为 PNG 文件并返回路径</p>
-          <div class="tags">
+
+        <div class="plugin-card cat-system"
+             data-id="com.intools.screenshot"
+             data-name="屏幕截图"
+             data-description="截取主屏幕画面，保存为 PNG 文件并返回路径"
+             data-category="system"
+             data-tags="screenshot,screen"
+             data-language="Python"
+             data-tools="screenshot:capture"
+             onclick="showDetail(this)">
+          <div class="card-header">
+            <div class="card-icon">屏</div>
+            <div class="card-title">
+              <h3>屏幕截图</h3>
+              <span class="card-author">InTools</span>
+            </div>
+            <span class="lang-badge" style="background:#3572A5">Python</span>
+          </div>
+          <p class="card-desc">截取主屏幕画面，保存为 PNG 文件并返回路径</p>
+          <div class="card-tags">
             <span class="tag">screenshot</span><span class="tag">screen</span>
           </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v0.1.0</span>
+          <div class="card-footer">
+            <span class="card-version">v0.1.0</span>
+            <span class="card-size">8.8 KB</span>
+            <span class="card-tools">1 个工具</span>
           </div>
         </div>
-      
-        <div class="plugin-card" data-id="com.intools.uidemo" data-name="UI Demo" data-description="演示插件 UI 声明系统的示例插件">
-          <h3>UI Demo</h3>
-          <p>演示插件 UI 声明系统的示例插件</p>
-          <div class="tags">
+
+        <div class="plugin-card cat-system"
+             data-id="com.intools.colorpicker"
+             data-name="屏幕取色器"
+             data-description="获取鼠标当前位置的屏幕像素颜色，返回 HEX / RGB / HSL 格式"
+             data-category="system"
+             data-tags="color,screen,clipboard"
+             data-language="Python"
+             data-tools="color:pick,color:at"
+             onclick="showDetail(this)">
+          <div class="card-header">
+            <div class="card-icon">屏</div>
+            <div class="card-title">
+              <h3>屏幕取色器</h3>
+              <span class="card-author">InTools</span>
+            </div>
+            <span class="lang-badge" style="background:#3572A5">Python</span>
+          </div>
+          <p class="card-desc">获取鼠标当前位置的屏幕像素颜色，返回 HEX / RGB / HSL 格式</p>
+          <div class="card-tags">
+            <span class="tag">color</span><span class="tag">screen</span><span class="tag">clipboard</span>
+          </div>
+          <div class="card-footer">
+            <span class="card-version">v0.1.0</span>
+            <span class="card-size">7.9 KB</span>
+            <span class="card-tools">2 个工具</span>
+          </div>
+        </div>
+
+        <div class="plugin-card cat-system"
+             data-id="com.intools.ocr"
+             data-name="屏幕文字识别"
+             data-description="截取屏幕区域并使用 Windows 内置 OCR 引擎识别其中的文字"
+             data-category="system"
+             data-tags="ocr,screen,clipboard"
+             data-language="Python"
+             data-tools="ocr:recognize"
+             onclick="showDetail(this)">
+          <div class="card-header">
+            <div class="card-icon">屏</div>
+            <div class="card-title">
+              <h3>屏幕文字识别</h3>
+              <span class="card-author">InTools</span>
+            </div>
+            <span class="lang-badge" style="background:#3572A5">Python</span>
+          </div>
+          <p class="card-desc">截取屏幕区域并使用 Windows 内置 OCR 引擎识别其中的文字</p>
+          <div class="card-tags">
+            <span class="tag">ocr</span><span class="tag">screen</span><span class="tag">clipboard</span>
+          </div>
+          <div class="card-footer">
+            <span class="card-version">v0.1.0</span>
+            <span class="card-size">17.1 KB</span>
+            <span class="card-tools">1 个工具</span>
+          </div>
+        </div>
+
+        <div class="plugin-card cat-direct"
+             data-id="com.example.demohello"
+             data-name="示范插件"
+             data-description="示范插件"
+             data-category="direct"
+             data-tags="demo"
+             data-language="Python"
+             data-tools="demo:hello:echo,demo:hello:info"
+             onclick="showDetail(this)">
+          <div class="card-header">
+            <div class="card-icon">示</div>
+            <div class="card-title">
+              <h3>示范插件</h3>
+              <span class="card-author">社区贡献</span>
+            </div>
+            <span class="lang-badge" style="background:#3572A5">Python</span>
+          </div>
+          <p class="card-desc">示范插件</p>
+          <div class="card-tags">
+            <span class="tag">demo</span>
+          </div>
+          <div class="card-footer">
+            <span class="card-version">v1.0.0</span>
+            <span class="card-size">9.0 KB</span>
+            <span class="card-tools">2 个工具</span>
+          </div>
+        </div>
+
+        <div class="plugin-card cat-system"
+             data-id="com.intools.net-tools"
+             data-name="网络工具"
+             data-description="Ping、DNS 查询、端口检测、HTTP 请求、本机 IP 获取"
+             data-category="system"
+             data-tags="net,network"
+             data-language="Python"
+             data-tools="net:ping,net:dns,net:check-port,net:http,net:request,net:ip"
+             onclick="showDetail(this)">
+          <div class="card-header">
+            <div class="card-icon">网</div>
+            <div class="card-title">
+              <h3>网络工具</h3>
+              <span class="card-author">InTools</span>
+            </div>
+            <span class="lang-badge" style="background:#3572A5">Python</span>
+          </div>
+          <p class="card-desc">Ping、DNS 查询、端口检测、HTTP 请求、本机 IP 获取</p>
+          <div class="card-tags">
+            <span class="tag">net</span><span class="tag">network</span>
+          </div>
+          <div class="card-footer">
+            <span class="card-version">v1.0.0</span>
+            <span class="card-size">8.7 KB</span>
+            <span class="card-tools">6 个工具</span>
+          </div>
+        </div>
+
+        <div class="plugin-card cat-system"
+             data-id="com.intools.web-scraper"
+             data-name="网页抓取"
+             data-description="抓取网页内容、提取文本、解析 HTML"
+             data-category="system"
+             data-tags="web,network"
+             data-language="Python"
+             data-tools="web:fetch,web:extract-text,web:extract-links"
+             onclick="showDetail(this)">
+          <div class="card-header">
+            <div class="card-icon">网</div>
+            <div class="card-title">
+              <h3>网页抓取</h3>
+              <span class="card-author">InTools</span>
+            </div>
+            <span class="lang-badge" style="background:#3572A5">Python</span>
+          </div>
+          <p class="card-desc">抓取网页内容、提取文本、解析 HTML</p>
+          <div class="card-tags">
+            <span class="tag">web</span><span class="tag">network</span>
+          </div>
+          <div class="card-footer">
+            <span class="card-version">v1.0.0</span>
+            <span class="card-size">8.9 KB</span>
+            <span class="card-tools">3 个工具</span>
+          </div>
+        </div>
+
+        <div class="plugin-card cat-system"
+             data-id="com.intools.file-ops"
+             data-name="文件操作"
+             data-description="文件系统基本操作：读取、写入、列目录、创建目录、删除、复制、移动、获取信息"
+             data-category="system"
+             data-tags="file"
+             data-language="Python"
+             data-tools="file:read,file:write,file:list,file:mkdir,file:delete,file:copy,file:move,file:info"
+             onclick="showDetail(this)">
+          <div class="card-header">
+            <div class="card-icon">文</div>
+            <div class="card-title">
+              <h3>文件操作</h3>
+              <span class="card-author">InTools</span>
+            </div>
+            <span class="lang-badge" style="background:#3572A5">Python</span>
+          </div>
+          <p class="card-desc">文件系统基本操作：读取、写入、列目录、创建目录、删除、复制、移动、获取信息</p>
+          <div class="card-tags">
+            <span class="tag">file</span>
+          </div>
+          <div class="card-footer">
+            <span class="card-version">v1.0.0</span>
+            <span class="card-size">10.8 KB</span>
+            <span class="card-tools">8 个工具</span>
+          </div>
+        </div>
+
+        <div class="plugin-card cat-system"
+             data-id="com.intools.file-hash"
+             data-name="文件哈希"
+             data-description="计算文件 MD5/SHA1/SHA256 哈希值，用于文件校验与完整性检查（Go 编译型插件）"
+             data-category="system"
+             data-tags="hash,file"
+             data-language="Go"
+             data-tools="hash:file,hash:dir"
+             onclick="showDetail(this)">
+          <div class="card-header">
+            <div class="card-icon">文</div>
+            <div class="card-title">
+              <h3>文件哈希</h3>
+              <span class="card-author">InTools</span>
+            </div>
+            <span class="lang-badge" style="background:#00ADD8">Go</span>
+          </div>
+          <p class="card-desc">计算文件 MD5/SHA1/SHA256 哈希值，用于文件校验与完整性检查（Go 编译型插件）</p>
+          <div class="card-tags">
+            <span class="tag">hash</span><span class="tag">file</span>
+          </div>
+          <div class="card-footer">
+            <span class="card-version">v1.0.0</span>
+            <span class="card-size">9.1 KB</span>
+            <span class="card-tools">2 个工具</span>
+          </div>
+        </div>
+
+        <div class="plugin-card cat-system"
+             data-id="com.intools.filesearch"
+             data-name="文件搜索"
+             data-description="按文件名关键词搜索指定目录，仅使用 Python 标准库"
+             data-category="system"
+             data-tags="search,file"
+             data-language="Python"
+             data-tools="search:files"
+             onclick="showDetail(this)">
+          <div class="card-header">
+            <div class="card-icon">文</div>
+            <div class="card-title">
+              <h3>文件搜索</h3>
+              <span class="card-author">InTools</span>
+            </div>
+            <span class="lang-badge" style="background:#3572A5">Python</span>
+          </div>
+          <p class="card-desc">按文件名关键词搜索指定目录，仅使用 Python 标准库</p>
+          <div class="card-tags">
+            <span class="tag">search</span><span class="tag">file</span>
+          </div>
+          <div class="card-footer">
+            <span class="card-version">v0.1.0</span>
+            <span class="card-size">5.1 KB</span>
+            <span class="card-tools">1 个工具</span>
+          </div>
+        </div>
+
+        <div class="plugin-card cat-system"
+             data-id="com.intools.system-ctrl"
+             data-name="系统控制"
+             data-description="音量控制、锁屏、发送通知、剪贴板读写"
+             data-category="system"
+             data-tags="sys,clipboard"
+             data-language="Python"
+             data-tools="sys:volume,sys:lock,sys:notify,sys:clipboard"
+             onclick="showDetail(this)">
+          <div class="card-header">
+            <div class="card-icon">系</div>
+            <div class="card-title">
+              <h3>系统控制</h3>
+              <span class="card-author">InTools</span>
+            </div>
+            <span class="lang-badge" style="background:#3572A5">Python</span>
+          </div>
+          <p class="card-desc">音量控制、锁屏、发送通知、剪贴板读写</p>
+          <div class="card-tags">
+            <span class="tag">sys</span><span class="tag">clipboard</span>
+          </div>
+          <div class="card-footer">
+            <span class="card-version">v1.0.0</span>
+            <span class="card-size">7.2 KB</span>
+            <span class="card-tools">4 个工具</span>
+          </div>
+        </div>
+
+        <div class="plugin-card cat-system"
+             data-id="com.intools.system-info"
+             data-name="系统信息"
+             data-description="查看 CPU、内存、磁盘、网络、环境变量等系统信息（Node.js 插件）"
+             data-category="system"
+             data-tags="system"
+             data-language="Node.js"
+             data-tools="system:info,system:cpu,system:network,system:disk,system:env"
+             onclick="showDetail(this)">
+          <div class="card-header">
+            <div class="card-icon">系</div>
+            <div class="card-title">
+              <h3>系统信息</h3>
+              <span class="card-author">InTools</span>
+            </div>
+            <span class="lang-badge" style="background:#339933">Node.js</span>
+          </div>
+          <p class="card-desc">查看 CPU、内存、磁盘、网络、环境变量等系统信息（Node.js 插件）</p>
+          <div class="card-tags">
+            <span class="tag">system</span>
+          </div>
+          <div class="card-footer">
+            <span class="card-version">v1.0.0</span>
+            <span class="card-size">8.9 KB</span>
+            <span class="card-tools">5 个工具</span>
+          </div>
+        </div>
+
+        <div class="plugin-card cat-system"
+             data-id="com.intools.app-launcher"
+             data-name="应用启动器"
+             data-description="打开文件、文件夹、网址，搜索已安装应用，在资源管理器中定位文件"
+             data-category="system"
+             data-tags="app,file"
+             data-language="Python"
+             data-tools="app:open,app:search,app:explorer"
+             onclick="showDetail(this)">
+          <div class="card-header">
+            <div class="card-icon">应</div>
+            <div class="card-title">
+              <h3>应用启动器</h3>
+              <span class="card-author">InTools</span>
+            </div>
+            <span class="lang-badge" style="background:#3572A5">Python</span>
+          </div>
+          <p class="card-desc">打开文件、文件夹、网址，搜索已安装应用，在资源管理器中定位文件</p>
+          <div class="card-tags">
+            <span class="tag">app</span><span class="tag">file</span>
+          </div>
+          <div class="card-footer">
+            <span class="card-version">v1.0.0</span>
+            <span class="card-size">5.4 KB</span>
+            <span class="card-tools">3 个工具</span>
+          </div>
+        </div>
+
+        <div class="plugin-card cat-system"
+             data-id="com.intools.ai-orchestrator"
+             data-name="AI 编排"
+             data-description="对接 OpenAI 兼容 API，自动调用其他插件的工具完成任务"
+             data-category="system"
+             data-tags="ai,network"
+             data-language="Python"
+             data-tools="ai:chat,ai:chat-with-history"
+             onclick="showDetail(this)">
+          <div class="card-header">
+            <div class="card-icon">A</div>
+            <div class="card-title">
+              <h3>AI 编排</h3>
+              <span class="card-author">InTools</span>
+            </div>
+            <span class="lang-badge" style="background:#3572A5">Python</span>
+          </div>
+          <p class="card-desc">对接 OpenAI 兼容 API，自动调用其他插件的工具完成任务</p>
+          <div class="card-tags">
+            <span class="tag">ai</span><span class="tag">network</span>
+          </div>
+          <div class="card-footer">
+            <span class="card-version">v0.2.0</span>
+            <span class="card-size">18.3 KB</span>
+            <span class="card-tools">2 个工具</span>
+          </div>
+        </div>
+
+        <div class="plugin-card cat-system"
+             data-id="com.intools.hello"
+             data-name="Hello 示范插件"
+             data-description="最小可运行插件：演示握手、工具清单与一次调用"
+             data-category="system"
+             data-tags="hello"
+             data-language="Python"
+             data-tools="hello:echo,hello:crash"
+             onclick="showDetail(this)">
+          <div class="card-header">
+            <div class="card-icon">H</div>
+            <div class="card-title">
+              <h3>Hello 示范插件</h3>
+              <span class="card-author">InTools</span>
+            </div>
+            <span class="lang-badge" style="background:#3572A5">Python</span>
+          </div>
+          <p class="card-desc">最小可运行插件：演示握手、工具清单与一次调用</p>
+          <div class="card-tags">
+            <span class="tag">hello</span>
+          </div>
+          <div class="card-footer">
+            <span class="card-version">v0.1.0</span>
+            <span class="card-size">3.7 KB</span>
+            <span class="card-tools">2 个工具</span>
+          </div>
+        </div>
+
+        <div class="plugin-card cat-system"
+             data-id="com.intools.uidemo"
+             data-name="UI Demo"
+             data-description="演示插件 UI 声明系统的示例插件"
+             data-category="system"
+             data-tags="demo,file"
+             data-language="Python"
+             data-tools="demo:status,demo:list,demo:report"
+             onclick="showDetail(this)">
+          <div class="card-header">
+            <div class="card-icon">U</div>
+            <div class="card-title">
+              <h3>UI Demo</h3>
+              <span class="card-author">InTools</span>
+            </div>
+            <span class="lang-badge" style="background:#3572A5">Python</span>
+          </div>
+          <p class="card-desc">演示插件 UI 声明系统的示例插件</p>
+          <div class="card-tags">
             <span class="tag">demo</span><span class="tag">file</span>
           </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v0.1.0</span>
+          <div class="card-footer">
+            <span class="card-version">v0.1.0</span>
+            <span class="card-size">7.6 KB</span>
+            <span class="card-tools">3 个工具</span>
           </div>
         </div>
-      
-        <div class="plugin-card" data-id="com.intools.windowinfo" data-name="窗口信息" data-description="获取当前活动窗口或指定窗口的标题、类名、进程、位置和大小等信息">
-          <h3>窗口信息</h3>
-          <p>获取当前活动窗口或指定窗口的标题、类名、进程、位置和大小等信息</p>
-          <div class="tags">
-            <span class="tag">window</span>
-          </div>
-          <div class="plugin-meta">
-            <span>InTools</span>
-            <span>v0.1.0</span>
-          </div>
-        </div>
-      
+  </div>
+
+  <!-- 插件详情弹窗 -->
+  <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+    <div class="modal" id="modalContent" onclick="event.stopPropagation()">
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+      <div id="modalBody"></div>
     </div>
   </div>
 
   <footer>
-    <p>InTools 插件市场 - 一切皆插件</p>
+    <p>InTools 插件市场 &middot; <a href="https://github.com/buxiaju/in-tools" target="_blank">GitHub</a> &middot; MIT License</p>
   </footer>
 
   <script>
-    function filterPlugins() {
-      const input = document.getElementById('searchInput').value.toLowerCase();
-      const cards = document.querySelectorAll('.plugin-card');
-      
-      cards.forEach(card => {
-        const id = card.dataset.id.toLowerCase();
-        const name = card.dataset.name.toLowerCase();
-        const description = card.dataset.description.toLowerCase();
-        
-        if (id.includes(input) || name.includes(input) || description.includes(input)) {
-          card.style.display = 'block';
-        } else {
-          card.style.display = 'none';
+    // ── 搜索 & 筛选 ──
+    const searchInput = document.getElementById('searchInput');
+    const grid = document.getElementById('pluginsGrid');
+    const resultCount = document.getElementById('resultCount');
+    const cards = Array.from(grid.querySelectorAll('.plugin-card'));
+
+    let activeCategory = 'all';
+    let activeLanguage = 'all';
+    let activeTags = new Set();
+
+    searchInput.addEventListener('input', applyFilters);
+
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const type = btn.dataset.filterType;
+        const value = btn.dataset.filterValue;
+
+        if (type === 'category') {
+          activeCategory = value;
+          document.querySelectorAll('.filter-btn[data-filter-type="category"]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        } else if (type === 'language') {
+          activeLanguage = value;
+          document.querySelectorAll('.filter-btn[data-filter-type="language"]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        } else if (type === 'tag') {
+          if (activeTags.has(value)) {
+            activeTags.delete(value);
+            btn.classList.remove('active');
+          } else {
+            activeTags.add(value);
+            btn.classList.add('active');
+          }
         }
+        applyFilters();
       });
+    });
+
+    function applyFilters() {
+      const q = searchInput.value.toLowerCase();
+      let shown = 0;
+
+      cards.forEach(card => {
+        const matchCategory = activeCategory === 'all' || card.dataset.category === activeCategory;
+        const matchLanguage = activeLanguage === 'all' || card.dataset.language === activeLanguage;
+
+        let matchTags = true;
+        if (activeTags.size > 0) {
+          const cardTags = card.dataset.tags.split(',').filter(Boolean);
+          matchTags = [...activeTags].some(t => cardTags.includes(t));
+        }
+
+        const searchText = (
+          card.dataset.id + ' ' + card.dataset.name + ' ' +
+          card.dataset.description + ' ' + card.dataset.tags + ' ' +
+          card.dataset.tools
+        ).toLowerCase();
+        const matchSearch = !q || searchText.includes(q);
+
+        const visible = matchCategory && matchLanguage && matchTags && matchSearch;
+        card.classList.toggle('hidden', !visible);
+        if (visible) shown++;
+      });
+
+      resultCount.textContent = '显示 ' + shown + ' 个插件';
+
+      // 空结果提示
+      let empty = grid.querySelector('.empty-state');
+      if (shown === 0) {
+        if (!empty) {
+          empty = document.createElement('div');
+          empty.className = 'empty-state';
+          empty.innerHTML = '<div class="empty-icon">🔍</div><p>没有找到匹配的插件</p>';
+          grid.appendChild(empty);
+        }
+      } else if (empty) {
+        empty.remove();
+      }
     }
+
+    // ── 插件详情弹窗 ──
+    function showDetail(card) {
+      const id = card.dataset.id;
+      const name = card.dataset.name;
+      const desc = card.dataset.description;
+      const lang = card.dataset.language;
+      const cat = card.dataset.category;
+      const tags = card.dataset.tags.split(',').filter(Boolean);
+      const tools = card.dataset.tools.split(',').filter(Boolean);
+
+      const catLabel = { system: '系统插件', user: '用户插件', test: '测试插件', direct: '社区插件' };
+
+      let toolsHtml = '';
+      // 尝试从 card 的 HTML 提取工具详情
+      // （工具名在 data-tools 中，描述需要从 search.json 获取，这里只展示名称）
+
+      document.getElementById('modalBody').innerHTML =
+        '<h2>' + name + '</h2>' +
+        '<div class="modal-meta">' +
+          '<span>📂 ' + (catLabel[cat] || cat) + '</span>' +
+          '<span>🌐 ' + lang + '</span>' +
+          '<span>v' + card.querySelector('.card-version').textContent.replace('v','') + '</span>' +
+          '<span>💾 ' + card.querySelector('.card-size').textContent + '</span>' +
+        '</div>' +
+        '<p class="modal-desc">' + (desc || '暂无描述') + '</p>' +
+        (tags.length ? '<div class="card-tags">' + tags.map(t => '<span class="tag">' + t + '</span>').join('') + '</div>' : '') +
+        '<div class="modal-section"><h4>工具 (' + tools.length + ')</h4>' +
+          '<ul class="tool-list">' + tools.map(t => '<li><span class="tool-name">' + t + '</span></li>').join('') + '</ul>' +
+        '</div>' +
+        '<div class="modal-actions">' +
+          '<a class="btn btn-primary" href="https://github.com/buxiaju/in-tools/tree/main/plugins/' + (cat === 'direct' ? '' : cat + '/') + name + '" target="_blank">查看源码</a>' +
+          '<button class="btn btn-outline" onclick="closeModal()">关闭</button>' +
+        '</div>';
+
+      document.getElementById('modalOverlay').classList.add('open');
+    }
+
+    function closeModal(e) {
+      if (!e || e.target === document.getElementById('modalOverlay')) {
+        document.getElementById('modalOverlay').classList.remove('open');
+      }
+    }
+
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
   </script>
 </body>
 </html>

@@ -118,6 +118,7 @@ fn main() {
             commands::get_marketplace_config,
             commands::set_marketplace_config,
             commands::fetch_marketplace_plugins,
+            commands::download_and_install_plugin,
         ])
         .setup(move |app| {
             // `AppHandle` 只在这里才存在，而 `PermissionChecker` 在它之前就得造好，

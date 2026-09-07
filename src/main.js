@@ -38,7 +38,7 @@ const listen = (event, handler) =>
 const EVENT_PERMISSION_PROMPT = "intools://permission-prompt";
 const EVENT_PLUGIN_NOTIFICATION = "intools://plugin-notification";
 
-const ROUTES = ["plugins", "chat", "permissions", "dev", "settings"];
+const ROUTES = ["plugins", "chat", "marketplace", "permissions", "dev", "settings"];
 
 /** 已卸载但仍在内存注册表里的插件 id。后端删了目录，列表要重启才会真的消失。 */
 const uninstalled = new Set();
@@ -613,13 +613,15 @@ function handleDialogRequest(pluginId, schema, callbackMethod) {
   // 对话框内容
   const content = document.createElement("div");
   content.style.cssText = `
-    background: white;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 24px;
     max-width: 500px;
     max-height: 80vh;
     overflow-y: auto;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    color: var(--fg);
   `;
 
   // 标题
@@ -702,13 +704,15 @@ function handleFormRequest(pluginId, schema, callbackMethod) {
   // 表单内容
   const form = document.createElement("form");
   form.style.cssText = `
-    background: white;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 24px;
     max-width: 500px;
     max-height: 80vh;
     overflow-y: auto;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    color: var(--fg);
   `;
 
   // 标题
@@ -720,7 +724,6 @@ function handleFormRequest(pluginId, schema, callbackMethod) {
   }
 
   // 表单字段
-  const formData = {};
   if (schema.fields && Array.isArray(schema.fields)) {
     schema.fields.forEach((field) => {
       const fieldContainer = document.createElement("div");
@@ -742,7 +745,7 @@ function handleFormRequest(pluginId, schema, callbackMethod) {
       input.style.cssText = `
         width: 100%;
         padding: 8px;
-        border: 1px solid #ccc;
+        border: 1px solid var(--border);
         border-radius: 4px;
         box-sizing: border-box;
       `;
@@ -816,18 +819,16 @@ async function submitChat(event) {
 
   const button = $("chat-form").querySelector("button[type=submit]");
   await withBusy(button, async () => {
-    // 显示打字指示器
     const typing = appendTyping();
-    try {
-      const result = await invoke("call_tool", {
-        toolName: "ai:chat",
-        args: { message },
-      });
-      typing.remove();
+    const result = await call("call_tool", {
+      toolName: "ai:chat",
+      args: { message },
+    });
+    typing.remove();
+    if (result === undefined) {
+      appendMsg("error", "AI 失败", "请检查 AI 配置是否正确（设置 → AI 配置）。");
+    } else {
       appendMsg("result", "AI", result.response || stringify(result));
-    } catch (e) {
-      typing.remove();
-      appendMsg("error", "AI 失败", String(e));
     }
   });
 }
@@ -1310,47 +1311,7 @@ function renderResultWithSchema(result, schema) {
   return wrap;
 }
 
-/** 极简 markdown 渲染（支持标题、列表、代码块、粗体）。 */
-function renderMarkdown(text) {
-  const container = el("div", "result-markdown");
-  const lines = text.split("\n");
-  let inCode = false;
-  let codeBlock = [];
 
-  for (const line of lines) {
-    if (line.startsWith("```")) {
-      if (inCode) {
-        const pre = el("pre", "code-block");
-        pre.textContent = codeBlock.join("\n");
-        container.append(pre);
-        codeBlock = [];
-        inCode = false;
-      } else {
-        inCode = true;
-      }
-      continue;
-    }
-    if (inCode) {
-      codeBlock.push(line);
-      continue;
-    }
-    if (line.startsWith("# ")) {
-      container.append(el("h3", null, line.slice(2)));
-    } else if (line.startsWith("## ")) {
-      container.append(el("h4", null, line.slice(3)));
-    } else if (line.startsWith("- ")) {
-      container.append(el("li", null, line.slice(2)));
-    } else if (line.trim()) {
-      container.append(el("p", null, line));
-    }
-  }
-  if (inCode && codeBlock.length) {
-    const pre = el("pre", "code-block");
-    pre.textContent = codeBlock.join("\n");
-    container.append(pre);
-  }
-  return container;
-}
 
 // ─────────────────── 快捷键 ───────────────────
 
@@ -1864,14 +1825,185 @@ function subscribe() {
   }).catch(guard(EVENT_PLUGIN_NOTIFICATION));
 }
 
+// ─────────────────── 插件市场 ───────────────────
+
+const DEFAULT_MARKETPLACE_URL = "https://buxiaju.github.io/in-tools";
+/** 市场索引缓存，避免每次进入视图都重新请求。 */
+let mpCache = null;
+/** 正在安装的插件 id 集合，用于按钮状态管理。 */
+const mpInstalling = new Set();
+/** 本次会话已安装的插件 id 集合，用于显示「已安装」状态。 */
+const mpInstalled = new Set();
+
+const LANG_COLORS = { Python: "#3572A5", "Node.js": "#3C9341", Go: "#00ADD8", Rust: "#dea584" };
+const CAT_LABELS = { system: "系统", test: "测试", user: "用户", direct: "社区" };
+
+async function fetchMarketplacePlugins() {
+  const config = await call("get_marketplace_config");
+  const url = config?.url?.trim() || DEFAULT_MARKETPLACE_URL;
+  const list = await call("fetch_marketplace_plugins", { marketplaceUrl: url });
+  return list || [];
+}
+
+function renderMpCard(p) {
+  const langColor = LANG_COLORS[p.language] || "#666";
+  const catLabel = CAT_LABELS[p.category] || p.category;
+  const isInstalling = mpInstalling.has(p.id);
+  const isInstalled = mpInstalled.has(p.id);
+  const sizeStr = p.file_size < 1024 ? `${p.file_size} B`
+    : p.file_size < 1024 * 1024 ? `${(p.file_size / 1024).toFixed(1)} KB`
+    : `${(p.file_size / (1024 * 1024)).toFixed(1)} MB`;
+
+  const card = el("div", "mp-card");
+  card.dataset.id = p.id;
+  card.dataset.name = p.name;
+  card.dataset.desc = (p.description || "").toLowerCase();
+  card.dataset.tags = (p.tags || []).join(" ");
+  card.dataset.language = p.language || "";
+
+  let btnLabel = "安装";
+  let btnDisabled = !p.download_url;
+  let btnClass = "btn mp-install-btn";
+  if (isInstalled) { btnLabel = "已安装 ✓"; btnDisabled = true; btnClass += " installed"; }
+  else if (isInstalling) { btnLabel = "安装中…"; btnDisabled = true; }
+
+  card.innerHTML = `
+    <div class="mp-card-head">
+      <div class="mp-card-icon">${(p.name || "?").charAt(0)}</div>
+      <div class="mp-card-info">
+        <div class="mp-card-title">${esc(p.name)}</div>
+        <div class="mp-card-author">${esc(p.author || "社区")}</div>
+      </div>
+      <span class="mp-lang" style="background:${langColor}">${esc(p.language || "?")}</span>
+    </div>
+    <p class="mp-card-desc">${esc(p.description || "暂无描述")}</p>
+    <div class="mp-card-tags">${(p.tags || []).map(t => `<span class="mp-tag">${esc(t)}</span>`).join("")}</div>
+    <div class="mp-card-foot">
+      <span>v${esc(p.version)}</span>
+      <span>${sizeStr}</span>
+      <span>${p.tools_count || 0} 个工具</span>
+      <span class="mp-card-cat">${esc(catLabel)}</span>
+    </div>
+    <button class="${btnClass}" data-url="${esc(p.download_url || "")}" data-name="${esc(p.name)}"
+      ${btnDisabled ? "disabled" : ""}>${btnLabel}</button>
+  `;
+  return card;
+}
+
+async function renderMarketplace() {
+  const grid = $("mp-grid");
+  const status = $("mp-status");
+
+  if (!mpCache) {
+    status.textContent = "正在加载市场…";
+    grid.replaceChildren();
+    mpCache = await fetchMarketplacePlugins();
+    status.textContent = "";
+  }
+
+  if (!mpCache || mpCache.length === 0) {
+    showEmpty(grid, "市场暂无插件", "请在「设置 → 插件市场」中检查市场 URL 是否正确。");
+    status.textContent = "";
+    return;
+  }
+
+  status.textContent = `${mpCache.length} 个插件可用`;
+  const fragment = document.createDocumentFragment();
+  for (const p of mpCache) fragment.append(renderMpCard(p));
+  grid.replaceChildren(fragment);
+  applyMpFilter();
+}
+
+function applyMpFilter() {
+  const q = ($("mp-filter")?.value || "").toLowerCase();
+  const grid = $("mp-grid");
+  let visible = 0;
+  for (const card of grid.querySelectorAll(".mp-card")) {
+    const text = `${card.dataset.id} ${card.dataset.name} ${card.dataset.desc} ${card.dataset.tags} ${card.dataset.language}`.toLowerCase();
+    const match = q.length === 0 || text.includes(q);
+    card.classList.toggle("hidden", !match);
+    if (match) visible++;
+  }
+  // 移除旧的无结果提示
+  const old = grid.querySelector(".mp-empty-filter");
+  if (old) old.remove();
+  if (visible === 0 && q.length > 0) {
+    const msg = el("div", "mp-empty-filter");
+    msg.style.cssText = "grid-column:1/-1;text-align:center;padding:40px;color:var(--fg-dim);";
+    msg.textContent = `没有匹配「${q}」的插件`;
+    grid.appendChild(msg);
+  }
+}
+
+async function installMarketPlugin(url, name, pluginId, button) {
+  if (!url) { toast("无下载地址", true); return; }
+  mpInstalling.add(pluginId);
+  button.textContent = "安装中…";
+  button.disabled = true;
+  const result = await call("download_and_install_plugin", { downloadUrl: url, pluginName: name });
+  mpInstalling.delete(pluginId);
+  if (result) {
+    mpInstalled.add(pluginId);
+    toast(`《${result.plugin_name}》已安装，点「刷新」即可在插件页看到`);
+    button.textContent = "已安装 ✓";
+    button.disabled = true;
+    button.classList.add("installed");
+  } else {
+    button.textContent = "安装";
+    button.disabled = false;
+  }
+}
+
+function bindMarketplace() {
+  $("mp-filter")?.addEventListener("input", applyMpFilter);
+
+  document.querySelector('[data-act="mp-refresh"]')?.addEventListener("click", async () => {
+    mpCache = null;
+    await renderMarketplace();
+  });
+
+  // 安装按钮事件委托
+  $("mp-grid")?.addEventListener("click", (e) => {
+    const btn = e.target.closest(".mp-install-btn");
+    if (!btn || btn.disabled) return;
+    const card = btn.closest(".mp-card");
+    const pluginId = card?.dataset?.id || "";
+    installMarketPlugin(btn.dataset.url, btn.dataset.name, pluginId, btn);
+  });
+
+  // 市场配置保存
+  $("mp-save")?.addEventListener("click", async () => {
+    const enabled = $("settings-marketplace")?.checked ?? false;
+    const url = ($("settings-marketplace-url")?.value || "").trim();
+    const result = await call("set_marketplace_config", { enabled, url });
+    if (result !== undefined) {
+      $("mp-config-status").textContent = "已保存";
+      setTimeout(() => { if ($("mp-config-status")) $("mp-config-status").textContent = ""; }, 2000);
+    }
+  });
+}
+
+async function loadMarketplaceConfig() {
+  const config = await call("get_marketplace_config");
+  if (!config) return;
+  if ($("settings-marketplace")) $("settings-marketplace").checked = config.enabled;
+  if ($("settings-marketplace-url")) $("settings-marketplace-url").value = config.url || DEFAULT_MARKETPLACE_URL;
+}
+
+function esc(s) {
+  // 轻量转义，避免 XSS；卡片内容来自远程 JSON，不可信。
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
 // ─────────────────── 路由 ───────────────────
 
 const RENDERERS = {
   plugins: renderPlugins,
   chat: () => {},
+  marketplace: renderMarketplace,
   permissions: renderPermissions,
   dev: renderDev,
-  settings: renderSettings,
+  settings: async () => { await renderSettings(); await loadMarketplaceConfig(); },
 };
 
 function navigate() {
@@ -1909,7 +2041,24 @@ function bind() {
   $("import-file").addEventListener("change", () => importPackage(importButton));
 
   document.querySelector('[data-act="clear-chat"]').addEventListener("click", () => {
-    clear($("chat-log"));
+    const log = $("chat-log");
+    clear(log);
+    // 恢复欢迎界面：首次进入时缓存欢迎 DOM，清空后重新挂载。
+    if (!clearChat.welcomeHtml) {
+      const welcome = $("chat-welcome");
+      if (welcome) clearChat.welcomeHtml = welcome.outerHTML;
+    }
+    if (clearChat.welcomeHtml) {
+      const frag = document.createRange().createContextualFragment(clearChat.welcomeHtml);
+      log.appendChild(frag);
+      // 重新绑定建议按钮
+      for (const btn of log.querySelectorAll(".chat-suggestion")) {
+        btn.addEventListener("click", () => {
+          $("chat-input").value = btn.dataset.msg;
+          $("chat-form").requestSubmit();
+        });
+      }
+    }
   });
 
   $("chat-form").addEventListener("submit", submitChat);
@@ -1951,6 +2100,16 @@ function bind() {
     btn.addEventListener("click", () => {
       $("chat-input").value = btn.dataset.msg;
       $("chat-form").requestSubmit();
+    });
+  }
+
+  bindMarketplace();
+
+  // 点击弹窗背景关闭（权限弹窗除外——必须显式决策）
+  for (const backdrop of document.querySelectorAll(".modal-backdrop")) {
+    if (backdrop.id === "prompt-modal") continue;
+    backdrop.addEventListener("click", (e) => {
+      if (e.target === backdrop) backdrop.hidden = true;
     });
   }
 

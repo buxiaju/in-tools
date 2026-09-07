@@ -1512,17 +1512,106 @@ pub async fn set_marketplace_config(
 }
 
 /// 从插件市场获取插件列表。
+///
+/// GET `{marketplace_url}/plugins.json` → 解析为 [`MarketplaceIndexResponse`]，
+/// 提取 `plugins` 数组并映射为前端友好的 [`MarketplacePluginView`]。
 #[tauri::command]
 pub async fn fetch_marketplace_plugins(
     marketplace_url: String,
 ) -> CmdResult<Vec<MarketplacePluginView>> {
-    // 这里简化处理，实际实现需要：
-    // 1. 从 marketplace_url 获取 JSON 数据
-    // 2. 解析插件列表
-    // 3. 返回格式化的插件信息
-    // 目前返回空列表作为占位实现
-    let _ = marketplace_url;
-    Ok(Vec::new())
+    let url = format!("{}/plugins.json", marketplace_url.trim_end_matches('/'));
+
+    let body = reqwest::get(&url)
+        .await
+        .map_err(|e| format!("获取市场索引失败：{e}"))?
+        .error_for_status()
+        .map_err(|e| format!("市场返回错误：{e}"))?
+        .text()
+        .await
+        .map_err(|e| format!("读取响应失败：{e}"))?;
+
+    let index: MarketplaceIndexResponse =
+        serde_json::from_str(&body).map_err(|e| format!("解析市场索引失败：{e}"))?;
+
+    // 按 id 去重：远端索引可能有重复条目（system/ + direct/ 同一插件），
+    // 保留先出现的即可。
+    let mut seen = std::collections::HashSet::new();
+    let unique: Vec<_> = index
+        .plugins
+        .into_iter()
+        .filter(|p| seen.insert(p.id.clone()))
+        .collect();
+
+    Ok(unique
+        .into_iter()
+        .map(|p| MarketplacePluginView {
+            id: p.id,
+            name: p.name,
+            version: p.version,
+            description: p.description.unwrap_or_default(),
+            author: p.author.unwrap_or_default(),
+            language: p.language.unwrap_or_default(),
+            category: p.category.unwrap_or_default(),
+            tags: p.tags.unwrap_or_default(),
+            homepage: p.homepage,
+            license: p.license,
+            file_size: p.file_size.unwrap_or(0),
+            download_url: p.download_url,
+            download_count: p.download_count.unwrap_or(0),
+            rating: p.rating.unwrap_or(0.0),
+            rating_count: p.rating_count.unwrap_or(0),
+            tools_count: p.tools_count.unwrap_or(0),
+        })
+        .collect())
+}
+
+/// 从插件市场下载并安装插件。
+///
+/// 流程：GET `download_url`（zip bytes）→ 调用 [`import::import_from_bytes`] → 返回安装结果。
+#[tauri::command]
+pub async fn download_and_install_plugin(
+    download_url: String,
+    _plugin_name: String,
+) -> CmdResult<ImportResultView> {
+    let bytes = reqwest::get(&download_url)
+        .await
+        .map_err(|e| format!("下载插件失败：{e}"))?
+        .error_for_status()
+        .map_err(|e| format!("下载返回错误：{e}"))?
+        .bytes()
+        .await
+        .map_err(|e| format!("读取下载内容失败：{e}"))?
+        .to_vec();
+
+    let plugins_root = HostConfig::load()
+        .map_err(|e| e.to_string())?
+        .effective_plugins_dir()
+        .map_err(|e| e.to_string())?;
+    let user_dir = plugins_root.join("user");
+
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
+        let mut existing_ids = Vec::new();
+        for subdir in &["system", "test", "user"] {
+            let dir = plugins_root.join(subdir);
+            if let Ok(entries) = discovery::scan_plugins_root(&dir) {
+                for entry in entries {
+                    if let Ok(p) = entry {
+                        existing_ids.push(p.manifest.plugin.id);
+                    }
+                }
+            }
+        }
+        import::import_from_bytes(&user_dir, &bytes, &existing_ids)
+    })
+    .await
+    .map_err(|e| format!("安装任务未能完成：{e}"))?
+    .map_err(|e| format!("安装失败：{e}"))?;
+
+    Ok(ImportResultView {
+        plugin_id: outcome.plugin_id,
+        plugin_name: outcome.plugin_name,
+        installed_dir: outcome.installed_dir.display().to_string(),
+    })
 }
 
 /// 插件市场配置视图。
@@ -1540,16 +1629,44 @@ pub struct MarketplacePluginView {
     pub version: String,
     pub description: String,
     pub author: String,
+    pub language: String,
     pub category: String,
     pub tags: Vec<String>,
     pub homepage: Option<String>,
     pub license: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
     pub file_size: u64,
+    pub download_url: Option<String>,
+    pub tools_count: u32,
     pub download_count: u64,
     pub rating: f32,
     pub rating_count: u32,
+}
+
+/// 市场索引 JSON（plugins.json）的完整结构。
+#[derive(Debug, Deserialize)]
+struct MarketplaceIndexResponse {
+    plugins: Vec<MarketplacePluginEntry>,
+}
+
+/// plugins.json 中单个插件条目（只取我们需要的字段）。
+#[derive(Debug, Deserialize)]
+struct MarketplacePluginEntry {
+    id: String,
+    name: String,
+    version: String,
+    description: Option<String>,
+    author: Option<String>,
+    language: Option<String>,
+    category: Option<String>,
+    tags: Option<Vec<String>>,
+    homepage: Option<String>,
+    license: Option<String>,
+    file_size: Option<u64>,
+    download_url: Option<String>,
+    tools_count: Option<u32>,
+    download_count: Option<u64>,
+    rating: Option<f32>,
+    rating_count: Option<u32>,
 }
 
 #[cfg(test)]

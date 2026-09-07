@@ -42,8 +42,8 @@ uuid = { version = "1.26.0", features = ["v4"] }
 # `compile_error!("You need to choose a zlib backend")` 拒绝编译。
 # `-zlib-rs` 是纯 Rust 实现，不引入 C 工具链依赖。
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
-# AI 配置连接测试。只需 HTTP POST，关掉默认 TLS（端点是本机 Ollama 或明文 API）。
-reqwest = { version = "0.13.4", default-features = false, features = ["json"] }
+# AI 配置连接测试 + 插件市场 HTTP(S) 请求。rustls 纯 Rust 实现，不引入 C 工具链。
+reqwest = { version = "0.13.4", default-features = false, features = ["json", "rustls"] }
 # 网络访问控制：IP 地址范围解析。
 ipnetwork = "0.20.0"
 # URL 解析：网络策略验证。

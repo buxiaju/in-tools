@@ -38,7 +38,7 @@ name = "system:env"
 description = "列出环境变量，可通过 prefix 过滤前缀"
 [tools.input_schema]
 type = "object"
-properties.prefix = { type = "string", description = "过滤前缀，如 PATH、NODE_" }
+properties = { prefix = { type = "string", description = "过滤前缀，如 PATH、NODE_" } }
 
 [capabilities]
 permissions = []
