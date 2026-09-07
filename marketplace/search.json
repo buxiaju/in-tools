@@ -1,0 +1,509 @@
+{
+  "version": "1.0.0",
+  "generated_at": "2026-09-07T00:34:11.513Z",
+  "plugins": [
+    {
+      "id": "com.intools.ai-orchestrator",
+      "name": "AI 编排",
+      "description": "对接 OpenAI 兼容 API，自动调用其他插件的工具完成任务",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "ai",
+        "network"
+      ],
+      "tools": [
+        "ai:chat",
+        "ai:chat-with-history"
+      ]
+    },
+    {
+      "id": "com.intools.app-launcher",
+      "name": "应用启动器",
+      "description": "打开文件、文件夹、网址，搜索已安装应用，在资源管理器中定位文件",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "app",
+        "file"
+      ],
+      "tools": [
+        "app:open",
+        "app:search",
+        "app:explorer"
+      ]
+    },
+    {
+      "id": "com.intools.clipboard",
+      "name": "剪贴板工具",
+      "description": "读取和写入系统剪贴板的文本内容，提供剪贴板历史记录",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "clipboard"
+      ],
+      "tools": [
+        "clipboard:read_text",
+        "clipboard:write_text",
+        "clipboard:append_text",
+        "clipboard:clear",
+        "clipboard:has_text"
+      ]
+    },
+    {
+      "id": "com.intools.colorpicker",
+      "name": "屏幕取色器",
+      "description": "获取鼠标当前位置的屏幕像素颜色，返回 HEX / RGB / HSL 格式",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "color",
+        "screen",
+        "clipboard"
+      ],
+      "tools": [
+        "color:pick",
+        "color:at"
+      ]
+    },
+    {
+      "id": "com.intools.dev-console",
+      "name": "开发者控制台",
+      "description": "通过 AI 对话调试插件：列出插件/工具、调用任意工具、校验 manifest、搜索",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "dev"
+      ],
+      "tools": [
+        "dev:plugins",
+        "dev:tools",
+        "dev:call",
+        "dev:config",
+        "dev:validate",
+        "dev:search"
+      ]
+    },
+    {
+      "id": "com.intools.file-hash",
+      "name": "文件哈希",
+      "description": "计算文件 MD5/SHA1/SHA256 哈希值，用于文件校验与完整性检查（Go 编译型插件）",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "hash",
+        "file"
+      ],
+      "tools": [
+        "hash:file",
+        "hash:dir"
+      ]
+    },
+    {
+      "id": "com.intools.file-ops",
+      "name": "文件操作",
+      "description": "文件系统基本操作：读取、写入、列目录、创建目录、删除、复制、移动、获取信息",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "file"
+      ],
+      "tools": [
+        "file:read",
+        "file:write",
+        "file:list",
+        "file:mkdir",
+        "file:delete",
+        "file:copy",
+        "file:move",
+        "file:info"
+      ]
+    },
+    {
+      "id": "com.intools.filesearch",
+      "name": "文件搜索",
+      "description": "按文件名关键词搜索指定目录，仅使用 Python 标准库",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "search",
+        "file"
+      ],
+      "tools": [
+        "search:files"
+      ]
+    },
+    {
+      "id": "com.intools.hello",
+      "name": "Hello 示范插件",
+      "description": "最小可运行插件：演示握手、工具清单与一次调用",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "hello"
+      ],
+      "tools": [
+        "hello:echo",
+        "hello:crash"
+      ]
+    },
+    {
+      "id": "com.intools.net-tools",
+      "name": "网络工具",
+      "description": "Ping、DNS 查询、端口检测、HTTP 请求、本机 IP 获取",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "net",
+        "network"
+      ],
+      "tools": [
+        "net:ping",
+        "net:dns",
+        "net:check-port",
+        "net:http",
+        "net:request",
+        "net:ip"
+      ]
+    },
+    {
+      "id": "com.intools.ocr",
+      "name": "屏幕文字识别",
+      "description": "截取屏幕区域并使用 Windows 内置 OCR 引擎识别其中的文字",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "ocr",
+        "screen",
+        "clipboard"
+      ],
+      "tools": [
+        "ocr:recognize"
+      ]
+    },
+    {
+      "id": "com.intools.plugin-builder",
+      "name": "插件生成器",
+      "description": "在 AI 对话中一句话生成完整插件：描述需求，自动生成 manifest + 代码 + 文档",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "plugin"
+      ],
+      "tools": [
+        "plugin:generate",
+        "plugin:list-templates"
+      ]
+    },
+    {
+      "id": "com.intools.process-mgr",
+      "name": "进程管理",
+      "description": "列出/搜索/终止进程，启动程序，执行 shell 命令",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "proc",
+        "process",
+        "shell"
+      ],
+      "tools": [
+        "proc:list",
+        "proc:kill",
+        "proc:start",
+        "proc:exec"
+      ]
+    },
+    {
+      "id": "com.intools.screenshot",
+      "name": "屏幕截图",
+      "description": "截取主屏幕画面，保存为 PNG 文件并返回路径",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "screenshot",
+        "screen"
+      ],
+      "tools": [
+        "screenshot:capture"
+      ]
+    },
+    {
+      "id": "com.intools.system-ctrl",
+      "name": "系统控制",
+      "description": "音量控制、锁屏、发送通知、剪贴板读写",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "sys",
+        "clipboard"
+      ],
+      "tools": [
+        "sys:volume",
+        "sys:lock",
+        "sys:notify",
+        "sys:clipboard"
+      ]
+    },
+    {
+      "id": "com.intools.uidemo",
+      "name": "UI Demo",
+      "description": "演示插件 UI 声明系统的示例插件",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "demo",
+        "file"
+      ],
+      "tools": [
+        "demo:status",
+        "demo:list",
+        "demo:report"
+      ]
+    },
+    {
+      "id": "com.intools.web-scraper",
+      "name": "网页抓取",
+      "description": "抓取网页内容、提取文本、解析 HTML",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "web",
+        "network"
+      ],
+      "tools": [
+        "web:fetch",
+        "web:extract-text",
+        "web:extract-links"
+      ]
+    },
+    {
+      "id": "com.intools.windowinfo",
+      "name": "窗口信息",
+      "description": "获取当前活动窗口或指定窗口的标题、类名、进程、位置和大小等信息",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "window"
+      ],
+      "tools": [
+        "window:active",
+        "window:list",
+        "window:find"
+      ]
+    },
+    {
+      "id": "com.intools.workflow-runner",
+      "name": "工作流",
+      "description": "串联多个插件工具，编排自动化工作流（演示反向 RPC 与跨插件调用）",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "workflow"
+      ],
+      "tools": [
+        "workflow:list",
+        "workflow:run",
+        "workflow:chain"
+      ]
+    },
+    {
+      "id": "com.intools.caller",
+      "name": "Caller 测试插件",
+      "description": "反向 RPC 集成测试的调用方：通过 host/* 回调宿主，验证插件间调用链路",
+      "author": "InTools",
+      "category": "test",
+      "tags": [
+        "caller"
+      ],
+      "tools": [
+        "caller:call",
+        "caller:list",
+        "caller:config",
+        "caller:notify",
+        "caller:unknown",
+        "caller:recurse"
+      ]
+    },
+    {
+      "id": "com.intools.responder",
+      "name": "Responder 测试插件",
+      "description": "反向 RPC 集成测试的响应方：声明 screen:capture 权限，用于验证权限拦截",
+      "author": "InTools",
+      "category": "test",
+      "tags": [
+        "responder",
+        "screen"
+      ],
+      "tools": [
+        "responder:echo"
+      ]
+    },
+    {
+      "id": "com.intools.caller",
+      "name": "Caller 测试插件",
+      "description": "反向 RPC 集成测试的调用方：通过 host/* 回调宿主，验证插件间调用链路",
+      "author": "InTools",
+      "category": "direct",
+      "tags": [
+        "caller"
+      ],
+      "tools": [
+        "caller:call",
+        "caller:list",
+        "caller:config",
+        "caller:notify",
+        "caller:unknown",
+        "caller:recurse"
+      ]
+    },
+    {
+      "id": "com.intools.clipboard",
+      "name": "剪贴板工具",
+      "description": "读取和写入系统剪贴板的文本内容，提供剪贴板历史记录",
+      "author": "InTools",
+      "category": "direct",
+      "tags": [
+        "clipboard"
+      ],
+      "tools": [
+        "clipboard:read_text",
+        "clipboard:write_text",
+        "clipboard:append_text",
+        "clipboard:clear",
+        "clipboard:has_text"
+      ]
+    },
+    {
+      "id": "com.intools.colorpicker",
+      "name": "屏幕取色器",
+      "description": "获取鼠标当前位置的屏幕像素颜色，返回 HEX / RGB / HSL 格式",
+      "author": "InTools",
+      "category": "direct",
+      "tags": [
+        "color",
+        "screen",
+        "clipboard"
+      ],
+      "tools": [
+        "color:pick",
+        "color:at"
+      ]
+    },
+    {
+      "id": "com.example.demohello",
+      "name": "示范插件",
+      "description": "示范插件",
+      "author": "",
+      "category": "direct",
+      "tags": [
+        "demo"
+      ],
+      "tools": [
+        "demo:hello:echo",
+        "demo:hello:info"
+      ]
+    },
+    {
+      "id": "com.intools.filesearch",
+      "name": "文件搜索",
+      "description": "按文件名关键词搜索指定目录，仅使用 Python 标准库",
+      "author": "InTools",
+      "category": "direct",
+      "tags": [
+        "search",
+        "file"
+      ],
+      "tools": [
+        "search:files"
+      ]
+    },
+    {
+      "id": "com.intools.hello",
+      "name": "Hello 示范插件",
+      "description": "最小可运行插件：演示握手、工具清单与一次调用",
+      "author": "InTools",
+      "category": "direct",
+      "tags": [
+        "hello"
+      ],
+      "tools": [
+        "hello:echo",
+        "hello:crash"
+      ]
+    },
+    {
+      "id": "com.intools.ocr",
+      "name": "屏幕文字识别",
+      "description": "截取屏幕区域并使用 Windows 内置 OCR 引擎识别其中的文字",
+      "author": "InTools",
+      "category": "direct",
+      "tags": [
+        "ocr",
+        "screen",
+        "clipboard"
+      ],
+      "tools": [
+        "ocr:recognize"
+      ]
+    },
+    {
+      "id": "com.intools.responder",
+      "name": "Responder 测试插件",
+      "description": "反向 RPC 集成测试的响应方：声明 screen:capture 权限，用于验证权限拦截",
+      "author": "InTools",
+      "category": "direct",
+      "tags": [
+        "responder",
+        "screen"
+      ],
+      "tools": [
+        "responder:echo"
+      ]
+    },
+    {
+      "id": "com.intools.screenshot",
+      "name": "屏幕截图",
+      "description": "截取主屏幕画面，保存为 PNG 文件并返回路径",
+      "author": "InTools",
+      "category": "direct",
+      "tags": [
+        "screenshot",
+        "screen"
+      ],
+      "tools": [
+        "screenshot:capture"
+      ]
+    },
+    {
+      "id": "com.intools.uidemo",
+      "name": "UI Demo",
+      "description": "演示插件 UI 声明系统的示例插件",
+      "author": "InTools",
+      "category": "direct",
+      "tags": [
+        "demo",
+        "file"
+      ],
+      "tools": [
+        "demo:status",
+        "demo:list",
+        "demo:report"
+      ]
+    },
+    {
+      "id": "com.intools.windowinfo",
+      "name": "窗口信息",
+      "description": "获取当前活动窗口或指定窗口的标题、类名、进程、位置和大小等信息",
+      "author": "InTools",
+      "category": "direct",
+      "tags": [
+        "window"
+      ],
+      "tools": [
+        "window:active",
+        "window:list",
+        "window:find"
+      ]
+    }
+  ]
+}

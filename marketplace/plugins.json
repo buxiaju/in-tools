@@ -1,0 +1,639 @@
+{
+  "version": "1.0.0",
+  "generated_at": "2026-09-07T00:34:11.512Z",
+  "total": 32,
+  "plugins": [
+    {
+      "id": "com.intools.ai-orchestrator",
+      "name": "AI 编排",
+      "version": "0.2.0",
+      "description": "对接 OpenAI 兼容 API，自动调用其他插件的工具完成任务",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "ai",
+        "network"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/system/ai-orchestrator",
+      "license": "MIT",
+      "created_at": "2026-09-06T02:28:50.028Z",
+      "updated_at": "2026-09-06T08:52:49.288Z",
+      "file_size": 18744,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.app-launcher",
+      "name": "应用启动器",
+      "version": "1.0.0",
+      "description": "打开文件、文件夹、网址，搜索已安装应用，在资源管理器中定位文件",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "app",
+        "file"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/system/app-launcher",
+      "license": "MIT",
+      "created_at": "2026-09-06T02:40:14.484Z",
+      "updated_at": "2026-09-06T05:27:12.455Z",
+      "file_size": 5566,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.clipboard",
+      "name": "剪贴板工具",
+      "version": "0.1.0",
+      "description": "读取和写入系统剪贴板的文本内容，提供剪贴板历史记录",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "clipboard"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/system/clipboard-tool",
+      "license": "MIT",
+      "created_at": "2026-09-06T02:28:50.035Z",
+      "updated_at": "2026-09-06T05:27:12.490Z",
+      "file_size": 8396,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.colorpicker",
+      "name": "屏幕取色器",
+      "version": "0.1.0",
+      "description": "获取鼠标当前位置的屏幕像素颜色，返回 HEX / RGB / HSL 格式",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "color",
+        "screen",
+        "clipboard"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/system/color-picker",
+      "license": "MIT",
+      "created_at": "2026-09-06T02:28:50.037Z",
+      "updated_at": "2026-09-06T05:27:12.491Z",
+      "file_size": 8127,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.dev-console",
+      "name": "开发者控制台",
+      "version": "1.0.0",
+      "description": "通过 AI 对话调试插件：列出插件/工具、调用任意工具、校验 manifest、搜索",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "dev"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/system/dev-console",
+      "license": "MIT",
+      "created_at": "2026-09-06T02:28:50.038Z",
+      "updated_at": "2026-09-06T05:27:47.849Z",
+      "file_size": 17038,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.file-hash",
+      "name": "文件哈希",
+      "version": "1.0.0",
+      "description": "计算文件 MD5/SHA1/SHA256 哈希值，用于文件校验与完整性检查（Go 编译型插件）",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "hash",
+        "file"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/system/file-hash",
+      "license": "MIT",
+      "created_at": "2026-09-06T02:28:50.042Z",
+      "updated_at": "2026-09-06T05:27:47.889Z",
+      "file_size": 9335,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.file-ops",
+      "name": "文件操作",
+      "version": "1.0.0",
+      "description": "文件系统基本操作：读取、写入、列目录、创建目录、删除、复制、移动、获取信息",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "file"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/system/file-ops",
+      "license": "MIT",
+      "created_at": "2026-09-06T02:40:14.479Z",
+      "updated_at": "2026-09-06T05:27:12.495Z",
+      "file_size": 11109,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.filesearch",
+      "name": "文件搜索",
+      "version": "0.1.0",
+      "description": "按文件名关键词搜索指定目录，仅使用 Python 标准库",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "search",
+        "file"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/system/file-search",
+      "license": "MIT",
+      "created_at": "2026-09-06T02:28:50.044Z",
+      "updated_at": "2026-09-06T05:27:12.496Z",
+      "file_size": 5256,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.hello",
+      "name": "Hello 示范插件",
+      "version": "0.1.0",
+      "description": "最小可运行插件：演示握手、工具清单与一次调用",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "hello"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/system/hello-plugin",
+      "license": "MIT",
+      "created_at": "2026-09-06T02:28:50.046Z",
+      "updated_at": "2026-09-06T05:27:47.884Z",
+      "file_size": 3835,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.net-tools",
+      "name": "网络工具",
+      "version": "1.0.0",
+      "description": "Ping、DNS 查询、端口检测、HTTP 请求、本机 IP 获取",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "net",
+        "network"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/system/net-tools",
+      "license": "MIT",
+      "created_at": "2026-09-06T02:40:14.484Z",
+      "updated_at": "2026-09-06T08:49:07.666Z",
+      "file_size": 8950,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.ocr",
+      "name": "屏幕文字识别",
+      "version": "0.1.0",
+      "description": "截取屏幕区域并使用 Windows 内置 OCR 引擎识别其中的文字",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "ocr",
+        "screen",
+        "clipboard"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/system/ocr-tool",
+      "license": "MIT",
+      "created_at": "2026-09-06T02:28:50.049Z",
+      "updated_at": "2026-09-06T05:27:12.501Z",
+      "file_size": 17528,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.plugin-builder",
+      "name": "插件生成器",
+      "version": "1.0.0",
+      "description": "在 AI 对话中一句话生成完整插件：描述需求，自动生成 manifest + 代码 + 文档",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "plugin"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/system/plugin-builder",
+      "license": "MIT",
+      "created_at": "2026-09-06T02:28:50.049Z",
+      "updated_at": "2026-09-06T05:27:47.883Z",
+      "file_size": 26517,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.process-mgr",
+      "name": "进程管理",
+      "version": "1.0.0",
+      "description": "列出/搜索/终止进程，启动程序，执行 shell 命令",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "proc",
+        "process",
+        "shell"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/system/process-mgr",
+      "license": "MIT",
+      "created_at": "2026-09-06T02:40:14.482Z",
+      "updated_at": "2026-09-06T05:27:12.506Z",
+      "file_size": 7277,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.screenshot",
+      "name": "屏幕截图",
+      "version": "0.1.0",
+      "description": "截取主屏幕画面，保存为 PNG 文件并返回路径",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "screenshot",
+        "screen"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/system/screenshot-plugin",
+      "license": "MIT",
+      "created_at": "2026-09-06T02:28:50.059Z",
+      "updated_at": "2026-09-06T05:27:12.509Z",
+      "file_size": 9021,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.system-ctrl",
+      "name": "系统控制",
+      "version": "1.0.0",
+      "description": "音量控制、锁屏、发送通知、剪贴板读写",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "sys",
+        "clipboard"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/system/system-ctrl",
+      "license": "MIT",
+      "created_at": "2026-09-06T02:40:14.484Z",
+      "updated_at": "2026-09-06T05:27:12.511Z",
+      "file_size": 7393,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.uidemo",
+      "name": "UI Demo",
+      "version": "0.1.0",
+      "description": "演示插件 UI 声明系统的示例插件",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "demo",
+        "file"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/system/ui-demo",
+      "license": "MIT",
+      "created_at": "2026-09-06T02:28:50.063Z",
+      "updated_at": "2026-09-06T05:27:47.885Z",
+      "file_size": 7832,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.web-scraper",
+      "name": "网页抓取",
+      "version": "1.0.0",
+      "description": "抓取网页内容、提取文本、解析 HTML",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "web",
+        "network"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/system/web-scraper",
+      "license": "MIT",
+      "created_at": "2026-09-06T08:50:02.720Z",
+      "updated_at": "2026-09-06T08:50:19.191Z",
+      "file_size": 9068,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.windowinfo",
+      "name": "窗口信息",
+      "version": "0.1.0",
+      "description": "获取当前活动窗口或指定窗口的标题、类名、进程、位置和大小等信息",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "window"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/system/window-info",
+      "license": "MIT",
+      "created_at": "2026-09-06T02:28:50.065Z",
+      "updated_at": "2026-09-06T05:27:12.519Z",
+      "file_size": 8905,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.workflow-runner",
+      "name": "工作流",
+      "version": "1.0.0",
+      "description": "串联多个插件工具，编排自动化工作流（演示反向 RPC 与跨插件调用）",
+      "author": "InTools",
+      "category": "system",
+      "tags": [
+        "workflow"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/system/workflow-runner",
+      "license": "MIT",
+      "created_at": "2026-09-06T02:28:50.067Z",
+      "updated_at": "2026-09-06T05:27:47.887Z",
+      "file_size": 8195,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.caller",
+      "name": "Caller 测试插件",
+      "version": "0.1.0",
+      "description": "反向 RPC 集成测试的调用方：通过 host/* 回调宿主，验证插件间调用链路",
+      "author": "InTools",
+      "category": "test",
+      "tags": [
+        "caller"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/test/caller-plugin",
+      "license": "MIT",
+      "created_at": "2026-09-06T02:28:50.031Z",
+      "updated_at": "2026-09-03T09:38:38.000Z",
+      "file_size": 11217,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.responder",
+      "name": "Responder 测试插件",
+      "version": "0.1.0",
+      "description": "反向 RPC 集成测试的响应方：声明 screen:capture 权限，用于验证权限拦截",
+      "author": "InTools",
+      "category": "test",
+      "tags": [
+        "responder",
+        "screen"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/test/responder-plugin",
+      "license": "MIT",
+      "created_at": "2026-09-06T02:28:50.056Z",
+      "updated_at": "2026-09-03T09:37:56.000Z",
+      "file_size": 4454,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.caller",
+      "name": "Caller 测试插件",
+      "version": "0.1.0",
+      "description": "反向 RPC 集成测试的调用方：通过 host/* 回调宿主，验证插件间调用链路",
+      "author": "InTools",
+      "category": "direct",
+      "tags": [
+        "caller"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/caller-plugin",
+      "license": "MIT",
+      "created_at": "2026-09-03T09:38:39.155Z",
+      "updated_at": "2026-09-03T09:38:39.184Z",
+      "file_size": 11217,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.clipboard",
+      "name": "剪贴板工具",
+      "version": "0.1.0",
+      "description": "读取和写入系统剪贴板的文本内容，提供剪贴板历史记录",
+      "author": "InTools",
+      "category": "direct",
+      "tags": [
+        "clipboard"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/clipboard-tool",
+      "license": "MIT",
+      "created_at": "2026-09-05T01:22:47.361Z",
+      "updated_at": "2026-09-05T07:42:15.409Z",
+      "file_size": 8395,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.colorpicker",
+      "name": "屏幕取色器",
+      "version": "0.1.0",
+      "description": "获取鼠标当前位置的屏幕像素颜色，返回 HEX / RGB / HSL 格式",
+      "author": "InTools",
+      "category": "direct",
+      "tags": [
+        "color",
+        "screen",
+        "clipboard"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/color-picker",
+      "license": "MIT",
+      "created_at": "2026-09-05T01:21:42.414Z",
+      "updated_at": "2026-09-05T02:08:52.562Z",
+      "file_size": 8126,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.example.demohello",
+      "name": "示范插件",
+      "version": "1.0.0",
+      "description": "示范插件",
+      "author": "",
+      "category": "direct",
+      "tags": [
+        "demo"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/demo-hello",
+      "license": "MIT",
+      "created_at": "2026-09-05T13:34:06.297Z",
+      "updated_at": "2026-09-05T13:34:06.302Z",
+      "file_size": 4591,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.filesearch",
+      "name": "文件搜索",
+      "version": "0.1.0",
+      "description": "按文件名关键词搜索指定目录，仅使用 Python 标准库",
+      "author": "InTools",
+      "category": "direct",
+      "tags": [
+        "search",
+        "file"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/file-search",
+      "license": "MIT",
+      "created_at": "2026-09-04T01:59:07.883Z",
+      "updated_at": "2026-09-04T11:00:55.671Z",
+      "file_size": 5255,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.hello",
+      "name": "Hello 示范插件",
+      "version": "0.1.0",
+      "description": "最小可运行插件：演示握手、工具清单与一次调用",
+      "author": "InTools",
+      "category": "direct",
+      "tags": [
+        "hello"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/hello-plugin",
+      "license": "MIT",
+      "created_at": "2026-09-03T04:30:51.161Z",
+      "updated_at": "2026-09-04T10:50:19.405Z",
+      "file_size": 3832,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.ocr",
+      "name": "屏幕文字识别",
+      "version": "0.1.0",
+      "description": "截取屏幕区域并使用 Windows 内置 OCR 引擎识别其中的文字",
+      "author": "InTools",
+      "category": "direct",
+      "tags": [
+        "ocr",
+        "screen",
+        "clipboard"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/ocr-tool",
+      "license": "MIT",
+      "created_at": "2026-09-05T01:25:16.532Z",
+      "updated_at": "2026-09-05T01:25:24.197Z",
+      "file_size": 13522,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.responder",
+      "name": "Responder 测试插件",
+      "version": "0.1.0",
+      "description": "反向 RPC 集成测试的响应方：声明 screen:capture 权限，用于验证权限拦截",
+      "author": "InTools",
+      "category": "direct",
+      "tags": [
+        "responder",
+        "screen"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/responder-plugin",
+      "license": "MIT",
+      "created_at": "2026-09-03T09:37:56.779Z",
+      "updated_at": "2026-09-03T09:37:56.817Z",
+      "file_size": 4454,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.screenshot",
+      "name": "屏幕截图",
+      "version": "0.1.0",
+      "description": "截取主屏幕画面，保存为 PNG 文件并返回路径",
+      "author": "InTools",
+      "category": "direct",
+      "tags": [
+        "screenshot",
+        "screen"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/screenshot-plugin",
+      "license": "MIT",
+      "created_at": "2026-09-04T07:16:15.803Z",
+      "updated_at": "2026-09-04T10:50:19.310Z",
+      "file_size": 9020,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.uidemo",
+      "name": "UI Demo",
+      "version": "0.1.0",
+      "description": "演示插件 UI 声明系统的示例插件",
+      "author": "InTools",
+      "category": "direct",
+      "tags": [
+        "demo",
+        "file"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/ui-demo",
+      "license": "MIT",
+      "created_at": "2026-09-05T07:26:58.515Z",
+      "updated_at": "2026-09-05T07:28:04.878Z",
+      "file_size": 5769,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    },
+    {
+      "id": "com.intools.windowinfo",
+      "name": "窗口信息",
+      "version": "0.1.0",
+      "description": "获取当前活动窗口或指定窗口的标题、类名、进程、位置和大小等信息",
+      "author": "InTools",
+      "category": "direct",
+      "tags": [
+        "window"
+      ],
+      "homepage": "https://github.com/buxiaju/in-tools/tree/main/plugins/window-info",
+      "license": "MIT",
+      "created_at": "2026-09-05T01:23:59.739Z",
+      "updated_at": "2026-09-05T01:32:47.798Z",
+      "file_size": 8904,
+      "download_count": 0,
+      "rating": 0,
+      "rating_count": 0
+    }
+  ]
+}

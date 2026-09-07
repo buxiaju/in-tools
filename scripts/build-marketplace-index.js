@@ -45,7 +45,12 @@ function scanPlugins() {
       if (!fs.existsSync(manifestPath)) continue;
 
       try {
-        const manifestContent = fs.readFileSync(manifestPath, 'utf-8');
+        // 读取文件并去除 BOM 字符
+        let manifestContent = fs.readFileSync(manifestPath, 'utf-8');
+        // 移除 UTF-8 BOM
+        if (manifestContent.charCodeAt(0) === 0xFEFF) {
+          manifestContent = manifestContent.slice(1);
+        }
         const manifest = toml.parse(manifestContent);
 
         // 读取 README（如果存在）
@@ -53,6 +58,9 @@ function scanPlugins() {
         const readmePath = path.join(pluginPath, 'README.md');
         if (fs.existsSync(readmePath)) {
           readme = fs.readFileSync(readmePath, 'utf-8');
+          if (readme.charCodeAt(0) === 0xFEFF) {
+            readme = readme.slice(1);
+          }
         }
 
         // 计算文件大小

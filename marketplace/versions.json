@@ -1,0 +1,358 @@
+{
+  "version": "1.0.0",
+  "generated_at": "2026-09-07T00:34:11.513Z",
+  "plugins": {
+    "com.intools.ai-orchestrator": {
+      "plugin_id": "com.intools.ai-orchestrator",
+      "versions": [
+        {
+          "version": "0.2.0",
+          "released_at": "2026-09-06T08:52:49.288Z",
+          "description": "对接 OpenAI 兼容 API，自动调用其他插件的工具完成任务",
+          "changelog": "",
+          "download_url": "https://github.com/buxiaju/in-tools/raw/main/plugins/system/ai-orchestrator.zip",
+          "file_size": 18744,
+          "file_hash": "",
+          "dependencies": {},
+          "min_host_version": null
+        }
+      ]
+    },
+    "com.intools.app-launcher": {
+      "plugin_id": "com.intools.app-launcher",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "released_at": "2026-09-06T05:27:12.455Z",
+          "description": "打开文件、文件夹、网址，搜索已安装应用，在资源管理器中定位文件",
+          "changelog": "",
+          "download_url": "https://github.com/buxiaju/in-tools/raw/main/plugins/system/app-launcher.zip",
+          "file_size": 5566,
+          "file_hash": "",
+          "dependencies": {},
+          "min_host_version": null
+        }
+      ]
+    },
+    "com.intools.clipboard": {
+      "plugin_id": "com.intools.clipboard",
+      "versions": [
+        {
+          "version": "0.1.0",
+          "released_at": "2026-09-05T07:42:15.409Z",
+          "description": "读取和写入系统剪贴板的文本内容，提供剪贴板历史记录",
+          "changelog": "",
+          "download_url": "https://github.com/buxiaju/in-tools/raw/main/plugins/clipboard-tool.zip",
+          "file_size": 8395,
+          "file_hash": "",
+          "dependencies": {},
+          "min_host_version": null
+        }
+      ]
+    },
+    "com.intools.colorpicker": {
+      "plugin_id": "com.intools.colorpicker",
+      "versions": [
+        {
+          "version": "0.1.0",
+          "released_at": "2026-09-05T02:08:52.562Z",
+          "description": "获取鼠标当前位置的屏幕像素颜色，返回 HEX / RGB / HSL 格式",
+          "changelog": "",
+          "download_url": "https://github.com/buxiaju/in-tools/raw/main/plugins/color-picker.zip",
+          "file_size": 8126,
+          "file_hash": "",
+          "dependencies": {},
+          "min_host_version": null
+        }
+      ]
+    },
+    "com.intools.dev-console": {
+      "plugin_id": "com.intools.dev-console",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "released_at": "2026-09-06T05:27:47.849Z",
+          "description": "通过 AI 对话调试插件：列出插件/工具、调用任意工具、校验 manifest、搜索",
+          "changelog": "",
+          "download_url": "https://github.com/buxiaju/in-tools/raw/main/plugins/system/dev-console.zip",
+          "file_size": 17038,
+          "file_hash": "",
+          "dependencies": {},
+          "min_host_version": null
+        }
+      ]
+    },
+    "com.intools.file-hash": {
+      "plugin_id": "com.intools.file-hash",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "released_at": "2026-09-06T05:27:47.889Z",
+          "description": "计算文件 MD5/SHA1/SHA256 哈希值，用于文件校验与完整性检查（Go 编译型插件）",
+          "changelog": "",
+          "download_url": "https://github.com/buxiaju/in-tools/raw/main/plugins/system/file-hash.zip",
+          "file_size": 9335,
+          "file_hash": "",
+          "dependencies": {},
+          "min_host_version": null
+        }
+      ]
+    },
+    "com.intools.file-ops": {
+      "plugin_id": "com.intools.file-ops",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "released_at": "2026-09-06T05:27:12.495Z",
+          "description": "文件系统基本操作：读取、写入、列目录、创建目录、删除、复制、移动、获取信息",
+          "changelog": "",
+          "download_url": "https://github.com/buxiaju/in-tools/raw/main/plugins/system/file-ops.zip",
+          "file_size": 11109,
+          "file_hash": "",
+          "dependencies": {},
+          "min_host_version": null
+        }
+      ]
+    },
+    "com.intools.filesearch": {
+      "plugin_id": "com.intools.filesearch",
+      "versions": [
+        {
+          "version": "0.1.0",
+          "released_at": "2026-09-04T11:00:55.671Z",
+          "description": "按文件名关键词搜索指定目录，仅使用 Python 标准库",
+          "changelog": "",
+          "download_url": "https://github.com/buxiaju/in-tools/raw/main/plugins/file-search.zip",
+          "file_size": 5255,
+          "file_hash": "",
+          "dependencies": {},
+          "min_host_version": null
+        }
+      ]
+    },
+    "com.intools.hello": {
+      "plugin_id": "com.intools.hello",
+      "versions": [
+        {
+          "version": "0.1.0",
+          "released_at": "2026-09-04T10:50:19.405Z",
+          "description": "最小可运行插件：演示握手、工具清单与一次调用",
+          "changelog": "",
+          "download_url": "https://github.com/buxiaju/in-tools/raw/main/plugins/hello-plugin.zip",
+          "file_size": 3832,
+          "file_hash": "",
+          "dependencies": {},
+          "min_host_version": null
+        }
+      ]
+    },
+    "com.intools.net-tools": {
+      "plugin_id": "com.intools.net-tools",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "released_at": "2026-09-06T08:49:07.666Z",
+          "description": "Ping、DNS 查询、端口检测、HTTP 请求、本机 IP 获取",
+          "changelog": "",
+          "download_url": "https://github.com/buxiaju/in-tools/raw/main/plugins/system/net-tools.zip",
+          "file_size": 8950,
+          "file_hash": "",
+          "dependencies": {},
+          "min_host_version": null
+        }
+      ]
+    },
+    "com.intools.ocr": {
+      "plugin_id": "com.intools.ocr",
+      "versions": [
+        {
+          "version": "0.1.0",
+          "released_at": "2026-09-05T01:25:24.197Z",
+          "description": "截取屏幕区域并使用 Windows 内置 OCR 引擎识别其中的文字",
+          "changelog": "",
+          "download_url": "https://github.com/buxiaju/in-tools/raw/main/plugins/ocr-tool.zip",
+          "file_size": 13522,
+          "file_hash": "",
+          "dependencies": {},
+          "min_host_version": null
+        }
+      ]
+    },
+    "com.intools.plugin-builder": {
+      "plugin_id": "com.intools.plugin-builder",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "released_at": "2026-09-06T05:27:47.883Z",
+          "description": "在 AI 对话中一句话生成完整插件：描述需求，自动生成 manifest + 代码 + 文档",
+          "changelog": "",
+          "download_url": "https://github.com/buxiaju/in-tools/raw/main/plugins/system/plugin-builder.zip",
+          "file_size": 26517,
+          "file_hash": "",
+          "dependencies": {},
+          "min_host_version": null
+        }
+      ]
+    },
+    "com.intools.process-mgr": {
+      "plugin_id": "com.intools.process-mgr",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "released_at": "2026-09-06T05:27:12.506Z",
+          "description": "列出/搜索/终止进程，启动程序，执行 shell 命令",
+          "changelog": "",
+          "download_url": "https://github.com/buxiaju/in-tools/raw/main/plugins/system/process-mgr.zip",
+          "file_size": 7277,
+          "file_hash": "",
+          "dependencies": {},
+          "min_host_version": null
+        }
+      ]
+    },
+    "com.intools.screenshot": {
+      "plugin_id": "com.intools.screenshot",
+      "versions": [
+        {
+          "version": "0.1.0",
+          "released_at": "2026-09-04T10:50:19.310Z",
+          "description": "截取主屏幕画面，保存为 PNG 文件并返回路径",
+          "changelog": "",
+          "download_url": "https://github.com/buxiaju/in-tools/raw/main/plugins/screenshot-plugin.zip",
+          "file_size": 9020,
+          "file_hash": "",
+          "dependencies": {},
+          "min_host_version": null
+        }
+      ]
+    },
+    "com.intools.system-ctrl": {
+      "plugin_id": "com.intools.system-ctrl",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "released_at": "2026-09-06T05:27:12.511Z",
+          "description": "音量控制、锁屏、发送通知、剪贴板读写",
+          "changelog": "",
+          "download_url": "https://github.com/buxiaju/in-tools/raw/main/plugins/system/system-ctrl.zip",
+          "file_size": 7393,
+          "file_hash": "",
+          "dependencies": {},
+          "min_host_version": null
+        }
+      ]
+    },
+    "com.intools.uidemo": {
+      "plugin_id": "com.intools.uidemo",
+      "versions": [
+        {
+          "version": "0.1.0",
+          "released_at": "2026-09-05T07:28:04.878Z",
+          "description": "演示插件 UI 声明系统的示例插件",
+          "changelog": "",
+          "download_url": "https://github.com/buxiaju/in-tools/raw/main/plugins/ui-demo.zip",
+          "file_size": 5769,
+          "file_hash": "",
+          "dependencies": {},
+          "min_host_version": null
+        }
+      ]
+    },
+    "com.intools.web-scraper": {
+      "plugin_id": "com.intools.web-scraper",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "released_at": "2026-09-06T08:50:19.191Z",
+          "description": "抓取网页内容、提取文本、解析 HTML",
+          "changelog": "",
+          "download_url": "https://github.com/buxiaju/in-tools/raw/main/plugins/system/web-scraper.zip",
+          "file_size": 9068,
+          "file_hash": "",
+          "dependencies": {},
+          "min_host_version": null
+        }
+      ]
+    },
+    "com.intools.windowinfo": {
+      "plugin_id": "com.intools.windowinfo",
+      "versions": [
+        {
+          "version": "0.1.0",
+          "released_at": "2026-09-05T01:32:47.798Z",
+          "description": "获取当前活动窗口或指定窗口的标题、类名、进程、位置和大小等信息",
+          "changelog": "",
+          "download_url": "https://github.com/buxiaju/in-tools/raw/main/plugins/window-info.zip",
+          "file_size": 8904,
+          "file_hash": "",
+          "dependencies": {},
+          "min_host_version": null
+        }
+      ]
+    },
+    "com.intools.workflow-runner": {
+      "plugin_id": "com.intools.workflow-runner",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "released_at": "2026-09-06T05:27:47.887Z",
+          "description": "串联多个插件工具，编排自动化工作流（演示反向 RPC 与跨插件调用）",
+          "changelog": "",
+          "download_url": "https://github.com/buxiaju/in-tools/raw/main/plugins/system/workflow-runner.zip",
+          "file_size": 8195,
+          "file_hash": "",
+          "dependencies": {},
+          "min_host_version": null
+        }
+      ]
+    },
+    "com.intools.caller": {
+      "plugin_id": "com.intools.caller",
+      "versions": [
+        {
+          "version": "0.1.0",
+          "released_at": "2026-09-03T09:38:39.184Z",
+          "description": "反向 RPC 集成测试的调用方：通过 host/* 回调宿主，验证插件间调用链路",
+          "changelog": "",
+          "download_url": "https://github.com/buxiaju/in-tools/raw/main/plugins/caller-plugin.zip",
+          "file_size": 11217,
+          "file_hash": "",
+          "dependencies": {},
+          "min_host_version": null
+        }
+      ]
+    },
+    "com.intools.responder": {
+      "plugin_id": "com.intools.responder",
+      "versions": [
+        {
+          "version": "0.1.0",
+          "released_at": "2026-09-03T09:37:56.817Z",
+          "description": "反向 RPC 集成测试的响应方：声明 screen:capture 权限，用于验证权限拦截",
+          "changelog": "",
+          "download_url": "https://github.com/buxiaju/in-tools/raw/main/plugins/responder-plugin.zip",
+          "file_size": 4454,
+          "file_hash": "",
+          "dependencies": {},
+          "min_host_version": null
+        }
+      ]
+    },
+    "com.example.demohello": {
+      "plugin_id": "com.example.demohello",
+      "versions": [
+        {
+          "version": "1.0.0",
+          "released_at": "2026-09-05T13:34:06.302Z",
+          "description": "示范插件",
+          "changelog": "",
+          "download_url": "https://github.com/buxiaju/in-tools/raw/main/plugins/demo-hello.zip",
+          "file_size": 4591,
+          "file_hash": "",
+          "dependencies": {},
+          "min_host_version": null
+        }
+      ]
+    }
+  }
+}
