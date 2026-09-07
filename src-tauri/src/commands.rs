@@ -1478,14 +1478,6 @@ pub async fn call_plugin_callback(
     args: serde_json::Value,
     state: State<'_, AppState>,
 ) -> CmdResult<()> {
-    // 构造一个 JSON-RPC 请求发送给目标插件
-    let request = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": method,
-        "params": args,
-    });
-
     // 通过 Supervisor 调用插件
     state
         .supervisor

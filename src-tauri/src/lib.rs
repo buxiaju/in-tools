@@ -13,6 +13,9 @@
 //! 二进制会在启动阶段直接以 0xC0000139 失败，把全部内核测试一起拖垮。
 
 pub mod config;
+pub mod error;
+pub mod health;
+pub mod logger;
 pub mod mcp;
 pub mod permission;
 pub mod protocol;

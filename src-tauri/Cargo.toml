@@ -19,7 +19,7 @@ async-trait = "0.1.92"
 axum = "0.8.9"
 # MCP 审计日志的时间戳。AuditEntry 自身不带时间，落盘时必须补上，
 # 否则事后无法归因。tauri 已传递引入同版本，不额外增加编译负担。
-chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std", "serde"] }
 dirs = "6.0.0"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
