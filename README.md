@@ -211,7 +211,18 @@ Claude Desktop 配置 InTools 端点
 ## 文档
 
 - [插件开发手册](./docs/plugin-development.md) — 完整的插件开发指南
+- [架构文档](./docs/architecture.md) — 系统架构和设计理念
+- [API 文档](./docs/api.md) — Tauri Commands 和插件协议参考
+- [安全文档](./docs/security.md) — 安全模型和最佳实践
 - [设计文档](./docs/superpowers/specs/) — 架构设计与实施计划
+
+## 贡献
+
+欢迎贡献代码、报告 Bug、提出功能建议。请阅读 [CONTRIBUTING.md](./CONTRIBUTING.md) 了解详情。
+
+## 更新日志
+
+查看 [CHANGELOG.md](./CHANGELOG.md) 了解版本变更历史。
 
 ## 许可证
 
